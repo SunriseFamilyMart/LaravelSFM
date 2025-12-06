@@ -53,7 +53,7 @@
                         <th>Quantity</th>
                         <th>Price per Unit (₹)</th>
                         <th>GST (%)</th>
-                        <th>Product Amount (₹)</th>
+                        <th>Product Gst Amount (₹)</th>
                         <th>Total Amount (₹)</th>
                         <th>Invoice No</th>
                         <th>Invoice File</th>
