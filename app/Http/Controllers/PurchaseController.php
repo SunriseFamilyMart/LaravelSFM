@@ -11,31 +11,39 @@ class PurchaseController extends Controller
 {
 public function index(Request $request)
 {
-    $query = Purchase::with(['product', 'supplier']);
+$query = Purchase::with(['product', 'supplier']);
 
-    // Optional: search/filter
-    if ($request->filled('search')) {
-        $search = $request->input('search');
-        $query->whereHas('product', fn($q) => $q->where('name', 'like', "%$search%"))
-              ->orWhereHas('supplier', fn($q) => $q->where('name', 'like', "%$search%"))
-              ->orWhere('invoice_number', 'like', "%$search%");
-    }
 
-    if ($request->filled('supplier_id')) {
-        $query->where('supplier_id', $request->supplier_id);
-    }
+if ($request->filled('search')) {
+    $search = $request->input('search');
+    $query->whereHas('product', fn($q) => $q->where('name', 'like', "%$search%"))
+          ->orWhereHas('supplier', fn($q) => $q->where('name', 'like', "%$search%"))
+          ->orWhere('invoice_number', 'like', "%$search%");
+}
 
-    if ($request->filled('product_id')) {
-        $query->where('product_id', $request->product_id);
-    }
+if ($request->filled('supplier_id')) {
+    $query->where('supplier_id', $request->supplier_id);
+}
 
-    $purchases = $query->latest()->paginate(10);
+if ($request->filled('product_id')) {
+    $query->where('product_id', $request->product_id);
+}
 
-    // Fetch suppliers and products for filters
-    $suppliers = Supplier::all();
-    $products = Product::all();
+$purchases = $query->latest()->paginate(10);
 
-    return view('purchases.index', compact('purchases', 'suppliers', 'products'));
+// Calculate total amount per invoice
+$invoiceTotals = $purchases->groupBy('invoice_number')->map(function ($items) {
+    return $items->sum(function ($purchase) {
+        return ($purchase->price * $purchase->quantity) * (1 + $purchase->gst / 100);
+    });
+});
+
+// Fetch suppliers and products for filters
+$suppliers = Supplier::all();
+$products = Product::all();
+
+return view('purchases.index', compact('purchases', 'suppliers', 'products', 'invoiceTotals'));
+
 }
 
 

@@ -52,7 +52,9 @@
                         <th>Supplier</th>
                         <th>Quantity</th>
                         <th>Price per Unit (₹)</th>
-                        <th>Total (₹)</th>
+                        <th>GST (%)</th>
+                        <th>Product Amount (₹)</th>
+                        <th>Total Amount (₹)</th>
                         <th>Invoice No</th>
                         <th>Invoice File</th>
                         <th>Purchased At</th>
@@ -66,8 +68,14 @@
                             <td>{{ $purchase->supplier->name ?? 'N/A' }}</td>
                             <td>{{ $purchase->quantity }}</td>
                             <td>{{ number_format($purchase->price, 2) }}</td>
-                            <td>{{ number_format($purchase->price * $purchase->quantity, 2) }}</td>
-                            <td>{{ $purchase->invoice_number ?? '—' }}</td>
+                           <td>{{ rtrim(rtrim($purchase->gst, '0'), '.') }}%</td>
+
+                            <td>
+    {{ number_format(($purchase->price * $purchase->quantity) + (($purchase->price * $purchase->quantity) * ($purchase->gst / 100)), 2) }}
+</td>
+<td>{{ number_format($invoiceTotals[$purchase->invoice_number] ?? 0, 2) }}</td>
+
+<td>{{ $purchase->invoice_number ?? '—' }}</td>
                             <td>
                                 @if ($purchase->invoice)
                                     <a href="{{ asset('storage/' . $purchase->invoice) }}" target="_blank"

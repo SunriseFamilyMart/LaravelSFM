@@ -14,6 +14,7 @@ class Purchase extends Model
         'supplier_id',
         'quantity',
         'price',
+        'gst',
         'invoice',
         'invoice_number',
 
