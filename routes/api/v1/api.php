@@ -35,6 +35,10 @@ use App\Http\Controllers\Api\V1\DeliveryManAuthController;
 
 
 
+Route::get('/hello', function () {
+    return response()->json(['message' => 'Hello']);
+});
+
 Route::options('/{any}', function (Request $request) {
     return Response::make('', 200, [
         'Access-Control-Allow-Origin' => '*',
@@ -273,7 +277,7 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::get('/sales/store-visits', [\App\Http\Controllers\Api\V1\StoreVisitController::class, 'index']);
     Route::get('/sales/delivery-men', [AuthController::class, 'allDeliveryMen']);
     Route::post('/sales/login', [AuthController::class, 'login']);
-
+    Route::get('/orders/arrear', [AuthController::class, 'getAllOrdersArrear']);
 
 
 

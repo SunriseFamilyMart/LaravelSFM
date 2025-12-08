@@ -94,16 +94,21 @@ trait SystemAddonTrait
      * @param string $path
      * @return array
      */
-    function getDirectories(string $path): array
-    {
-        $directories = [];
-        $items = scandir($path);
-        foreach ($items as $item) {
-            if ($item == '..' || $item == '.')
-                continue;
-            if (is_dir($path . '/' . $item))
-                $directories[] = $item;
-        }
-        return $directories;
+   static function getDirectories(string $path): array
+{
+    if (!is_dir($path)) {
+        return []; // Folder doesn't exist, return empty array
     }
+
+    $directories = [];
+    $items = scandir($path);
+    foreach ($items as $item) {
+        if ($item == '..' || $item == '.')
+            continue;
+        if (is_dir($path . '/' . $item))
+            $directories[] = $item;
+    }
+    return $directories;
+}
+
 }

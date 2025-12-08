@@ -7,6 +7,7 @@ use Twilio\Rest\Client;
 use Illuminate\Support\Facades\Http;
 use GuzzleHttp\Client as HpptClient;
 use App\Models\AddonSetting;
+use App\Models\Setting;
 
 trait  SmsGateway
 {
