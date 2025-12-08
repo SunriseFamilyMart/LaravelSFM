@@ -126,51 +126,7 @@ class AuthController extends Controller
             'points_count' => $locations->count(),
         ]);
     }
-   public function getAllOrdersArrear(Request $request): JsonResponse
-{
-    // ----------------------------
-    // 1. Validate Token
-    // ----------------------------
-    $token = $request->header('Authorization'); // Bearer <token>
-
-    if (!$token) {
-        return response()->json(['error' => 'Token missing'], 401);
-    }
-
-    $token = str_replace('Bearer ', '', $token);
-
-    $salesPerson = SalesPerson::where('auth_token', $token)->first();
-
-    if (!$salesPerson) {
-        return response()->json(['error' => 'Invalid token'], 401);
-    }
-
-    // ----------------------------
-    // 2. Fetch Orders With Arrear
-    // ----------------------------
-    $orders = DB::table('orders as o')
-        ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
-        ->selectRaw('
-            o.id as order_id,
-            o.order_amount as order_amount,
-            COALESCE(SUM(op.amount), 0) as total_paid,
-            (o.order_amount - COALESCE(SUM(op.amount), 0)) as arrear_balance
-        ')
-        ->groupBy('o.id', 'o.order_amount')
-        ->orderByDesc('o.id')
-        ->get();
-
-    // ----------------------------
-    // 3. Return Response
-    // ----------------------------
-    return response()->json([
-        'status' => 'success',
-        'sales_person' => $salesPerson->name,
-        'orders_count' => $orders->count(),
-        'orders' => $orders
-    ]);
-}
-
+    
     private function haversineDistance($lat1, $lon1, $lat2, $lon2)
     {
         $earthRadius = 6371; // km
@@ -576,6 +532,48 @@ class AuthController extends Controller
             'data' => $stores
         ]);
     }
+   public function getAllOrdersArrear(Request $request): JsonResponse
+{
+// 🔐 Get token from header
+$token = $request->header('Authorization');
+
+
+if (!$token) {
+    return response()->json([
+        'success' => false,
+        'message' => 'Unauthorized. Missing token.'
+    ], 401);
+}
+
+$salesPerson = SalesPerson::where('auth_token', $token)->first();
+
+if (!$salesPerson) {
+    return response()->json([
+        'success' => false,
+        'message' => 'Unauthorized. Invalid token.'
+    ], 401);
+}
+
+$orders = DB::table('orders as o')
+    ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+    ->selectRaw('
+        o.id as order_id,
+        o.order_amount as order_amount,
+        COALESCE(SUM(op.amount), 0) as total_paid,
+        (o.order_amount - COALESCE(SUM(op.amount), 0)) as arrear_balance
+    ')
+    ->groupBy('o.id', 'o.order_amount')
+    ->orderByDesc('o.id')
+    ->get();
+
+return response()->json([
+    'success' => true,
+    'orders_count' => $orders->count(),
+    'orders' => $orders
+]);
+
+
+}
 
     // 📌 Fetch profile by auth token
     public function saleprofile(Request $request)
