@@ -267,7 +267,7 @@ class DeliverymanController extends Controller
    
 public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
 {
-    // 1️⃣ Validate token
+   
     $validator = Validator::make($request->all(), [
         'token' => 'required'
     ]);
@@ -276,7 +276,6 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
-    // 2️⃣ Find deliveryman by token
     $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
     if (!$deliveryman) {
         return response()->json([
@@ -286,7 +285,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ], 401);
     }
 
-    // 3️⃣ Fetch current orders for this deliveryman
+   
     $orders = $this->order->with([
             'delivery_address',
             'customer',
@@ -327,6 +326,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
     return response()->json($orders, 200);
 }
+
 
 
 
