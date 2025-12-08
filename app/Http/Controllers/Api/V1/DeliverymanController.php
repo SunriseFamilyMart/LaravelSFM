@@ -1207,6 +1207,49 @@ class DeliverymanController extends Controller
             'payments' => $payments
         ], 200);
     }
+    public function getAllOrdersArrear(Request $request): JsonResponse
+{
+    
+    $validator = Validator::make($request->all(), [
+        'token' => 'required',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => Helpers::error_processor($validator)
+        ], 403);
+    }
+
+    
+    $deliveryman = DeliveryMan::where('auth_token', $request->token)->first();
+
+    if (!$deliveryman) {
+        return response()->json([
+            'errors' => [['code' => '401', 'message' => 'Invalid token!']]
+        ], 401);
+    }
+
+    $orders = DB::table('orders as o')
+        ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+        ->selectRaw('
+            o.id as order_id,
+            o.order_amount as order_amount,
+            COALESCE(SUM(op.amount), 0) as total_paid,
+            (o.order_amount - COALESCE(SUM(op.amount), 0)) as arrear_balance
+        ')
+        ->where('o.delivery_man_id', $deliveryman->id) // Filter by deliveryman
+        ->groupBy('o.id', 'o.order_amount')
+        ->orderByDesc('o.id')
+        ->get();
+
+   
+    return response()->json([
+        'success' => true,
+        'orders_count' => $orders->count(),
+        'orders' => $orders
+    ], 200);
+}
+
 
 
     public function getPaymentMethods()

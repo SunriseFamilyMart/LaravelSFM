@@ -29,11 +29,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\V1\StoreVisitController;
 use App\Http\Controllers\Api\V1\OrderApiController;
 use App\Http\Controllers\Api\V1\DeliveryManAuthController;
-
-
-
-
-
+use Mpdf\Tag\Del;
 
 Route::get('/hello', function () {
     return response()->json(['message' => 'Hello']);
@@ -224,7 +220,7 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
             Route::get('/order/payments/list', [DeliverymanController::class, 'index']);
             Route::get('/order/payment-methods', [DeliverymanController::class, 'getPaymentMethods']);
             Route::post('order/delete-product', [DeliverymanController::class, 'deleteOrderProduct']);
-
+             Route::get('/orders/arrear', [DeliverymanController::class, 'getAllOrdersArrear']);
             Route::post('/order-edit-logs', [DeliverymanController::class, 'orderEditLogs']);
 
         });
