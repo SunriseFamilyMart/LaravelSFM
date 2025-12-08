@@ -264,50 +264,70 @@ class DeliverymanController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
-    public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'token' => 'required'
-        ]);
-        if ($validator->fails()) {
-            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
-        }
+   
+public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
+{
+    // 1️⃣ Validate token
+    $validator = Validator::make($request->all(), [
+        'token' => 'required'
+    ]);
 
-        $deliveryman = $this->deliveryman->where('auth_token', $request['token'])->first();
-        if (!$deliveryman) {
-            return response()->json([
-                'errors' => [
-                    ['code' => '401', 'message' => 'Invalid token!']
-                ]
-            ], 401);
-        }
-
-        $orders = $this->order->with(['delivery_address', 'customer', 'partial_payment', 'order_image', 'store'])
-            ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'out_for_delivery'])
-            ->where('delivery_man_id', $deliveryman->id)
-            ->get();
-
-        // Map store info into delivery_address if delivery_address is missing
-        $orders->transform(function ($order) {
-            if (!$order->delivery_address && $order->store) {
-                $order->delivery_address = [
-                    'id' => $order->store->id,
-                    'address_type' => 'Store',
-                    'store_name' => $order->store->store_name,
-                    'contact_person_name' => $order->store->customer_name ?? null,
-                    'contact_person_number' => $order->store->phone_number ?? null,
-                    'address' => $order->store->address ?? null,
-                    'latitude' => $order->store->latitude,
-                    'longitude' => $order->store->longitude,
-                    'landmark' => $order->store->landmark ?? null
-                ];
-            }
-
-            return $order;
-        });
-
-        return response()->json($orders, 200);
+    if ($validator->fails()) {
+        return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
+
+    // 2️⃣ Find deliveryman by token
+    $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
+    if (!$deliveryman) {
+        return response()->json([
+            'errors' => [
+                ['code' => '401', 'message' => 'Invalid token!']
+            ]
+        ], 401);
+    }
+
+    // 3️⃣ Fetch current orders for this deliveryman
+    $orders = $this->order->with([
+            'delivery_address',
+            'customer',
+            'partial_payment',
+            'order_image',
+            'store'
+        ])
+        ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'out_for_delivery'])
+        ->where('delivery_man_id', $deliveryman->id)
+        ->get();
+
+    // 4️⃣ Transform orders
+    $orders->transform(function ($order) {
+
+        // ✅ Set total_tax_amount = 0 if order_amount = 0
+        if ($order->order_amount == 0) {
+            $order->total_tax_amount = 0;
+            $order->update(['total_tax_amount' => 0]);
+        }
+
+        // ✅ Map store address if delivery_address is missing
+        if (!$order->delivery_address && $order->store) {
+            $order->delivery_address = [
+                'id' => $order->store->id,
+                'address_type' => 'Store',
+                'store_name' => $order->store->store_name,
+                'contact_person_name' => $order->store->customer_name ?? null,
+                'contact_person_number' => $order->store->phone_number ?? null,
+                'address' => $order->store->address ?? null,
+                'latitude' => $order->store->latitude,
+                'longitude' => $order->store->longitude,
+                'landmark' => $order->store->landmark ?? null
+            ];
+        }
+
+        return $order;
+    });
+
+    return response()->json($orders, 200);
+}
+
 
 
     /**
