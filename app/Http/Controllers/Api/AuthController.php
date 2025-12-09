@@ -499,8 +499,7 @@ class AuthController extends Controller
     }
 
 
-
-   public function myStores(Request $request)
+public function myStores(Request $request)
 {
     // 🔐 Get token from header
     $token = $request->header('Authorization');
@@ -521,28 +520,21 @@ class AuthController extends Controller
         ], 401);
     }
 
-    // 📌 Fetch stores with total orders and arrear balance
+    // 📌 Fetch stores created by this salesperson
     $stores = Store::where('sales_person_id', $salesPerson->id)
-        ->withCount(['orders as total_order_amount' => function ($query) {
-            $query->select(DB::raw("COALESCE(SUM(order_amount),0)"));
-        }])
-        ->withCount(['orders as total_first_payment' => function ($query) {
-            $query->leftJoin('order_payments', 'orders.id', '=', 'order_payments.order_id')
-                  ->where('order_payments.type', 'first_payment')
-                  ->select(DB::raw("COALESCE(SUM(order_payments.amount),0)"));
-        }])
-        ->get()
-        ->map(function($store) {
-            $store->arrear_balance = $store->total_order_amount - $store->total_first_payment;
-            return $store;
-        });
+        ->latest()
+        ->get();
 
-    if ($stores->isEmpty()) {
-        return response()->json([
-            'success' => true,
-            'message' => 'No stores found.',
-            'data' => []
-        ]);
+    // ➕ Add arrear_amount for each store
+    foreach ($stores as $store) {
+
+        $arrear = DB::table('orders as o')
+            ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+            ->where('o.store_id', $store->id)
+            ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
+            ->first();
+
+        $store->arrear_amount = $arrear->arrear_amount ?? 0;
     }
 
     return response()->json([
@@ -551,6 +543,8 @@ class AuthController extends Controller
         'data' => $stores
     ]);
 }
+
+
    public function getAllOrdersArrear(Request $request): JsonResponse
 {
 // 🔐 Get token from header
