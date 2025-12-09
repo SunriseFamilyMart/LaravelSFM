@@ -53,6 +53,14 @@
                                 <small class="nav-subtitle">{{ translate('order_management') }}</small>
                                 <small class="tio-more-horizontal nav-subtitle-replacer"></small>
                             </li>
+<li class="nav-item {{ Request::is('admin/orders/ordermanagement*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('admin.orders.ordermanagement') }}" title="Order Management">
+        <i class="tio-file nav-icon"></i>
+        <span class="text-truncate">Order Management</span>
+    </a>
+</li>
+
+
 
                             {{-- <li
                                 class="navbar-vertical-aside-has-menu {{ Request::is('admin/verify-offline-payment*') ? 'show active' : '' }}">

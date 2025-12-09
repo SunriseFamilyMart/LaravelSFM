@@ -2931,4 +2931,5 @@
   'Sales Manager Login' => 'Sales Manager Login',
   'sales Manager' => 'Sales Manager',
   'partial' => 'Partial',
+  'Order Management' => 'Order Management',
 );

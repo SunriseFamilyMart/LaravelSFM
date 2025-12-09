@@ -11,6 +11,10 @@ use App\Model\DeliveryMan;
 use App\Model\Order;
 use App\Model\OrderDetail;
 use App\Model\Product;
+use App\Models\OrderPayment;
+
+
+use App\Models\Supplier;
 use App\Models\DeliveryChargeByArea;
 use App\Models\OfflinePayment;
 use App\Models\OrderArea;
@@ -112,6 +116,164 @@ class OrderController extends Controller
 
         return view('admin-views.order.list', compact('orders', 'status', 'search', 'branches', 'branchId', 'startDate', 'endDate', 'countData'));
     }
+
+
+
+public function orderManagement(Request $request)
+{
+    $supplierId = $request->supplier;
+    $productId  = $request->product;
+    $status     = $request->status;
+
+    $limit = $request->get('limit', 10);
+
+    $orders = Order::with(['details.product.supplier', 'payments'])
+        ->when($status, fn ($q) => $q->where('order_status', $status))
+        ->whereHas('details', function ($q) use ($productId, $supplierId) {
+
+            if ($productId) {
+                $q->where('product_id', $productId);
+            }
+
+            if ($supplierId) {
+                $q->whereHas('product', function ($p) use ($supplierId) {
+                    $p->where('supplier_id', $supplierId);
+                });
+            }
+        })
+        ->latest()
+        ->paginate($limit); // ⭐ Pagination added here
+
+    /* ================= SUMMARY ================= */
+    // items() required because paginate returns LengthAwarePaginator
+    $orderCollection = collect($orders->items());
+
+    $summary = [
+        'total_orders' => $orderCollection->count(),
+        'delivered'    => $orderCollection->where('order_status', 'delivered')->count(),
+        'in_progress'  => $orderCollection->where('order_status', 'processing')->count(),
+        'delayed'      => $orderCollection->where('order_status', 'failed')->count(),
+        'cancelled'    => $orderCollection->where('order_status', 'canceled')->count(),
+
+        'total_purchase' => $orderCollection->sum('order_amount'),
+        'total_paid'     => $orderCollection->sum(fn ($o) => $o->payments->sum('amount')),
+        'outstanding'    => $orderCollection->sum('order_amount')
+                                - $orderCollection->sum(fn ($o) => $o->payments->sum('amount')),
+    ];
+
+    return view('admin-views.order.ordermanagement', [
+        'orders'    => $orders,        // paginator object
+        'suppliers' => Supplier::all(),
+        'products'  => Product::all(),
+        'summary'   => $summary
+    ]);
+}
+public function updateOrder(Request $request, $id)
+{
+    $request->validate([
+        'order_status' => 'required',
+        'paid_amount'  => 'nullable|numeric|min:0',
+    ]);
+
+    $order = Order::with('payments')->findOrFail($id);
+
+    // Update Status
+    $order->order_status = $request->order_status;
+    $order->save();
+
+    // Add NEW PAYMENT (if provided)
+    if ($request->paid_amount > 0) {
+        $order->payments()->create([
+            'amount' => $request->paid_amount,
+            'method' => 'manual'
+        ]);
+    }
+
+    return back()->with('success', 'Order updated successfully.');
+}
+
+public function createOrder()
+{
+    return view('admin-views.order.create', [
+        'suppliers' => Supplier::all(),
+        'products'  => Product::select('id','name','price')->get()
+
+    ]);
+}
+
+// AJAX: Get products by supplier
+public function getSupplierProducts($supplierId)
+{
+    return Product::where('supplier_id', $supplierId)->get();
+}
+
+// AJAX: Get product price
+public function getProductPrice($id)
+{
+    return Product::find($id);
+}
+
+
+public function storeOrder(Request $request)
+{
+    $request->validate([
+        'supplier_id' => 'required|exists:suppliers,id',
+        'order_date' => 'required|date',
+        'expected_date' => 'required|date',
+        'delivery_date' => 'nullable|date',
+        'invoice_no' => 'required',
+        'order_status' => 'required',
+        'payment_mode' => 'required',
+        'products.*.product_id' => 'required|exists:products,id',
+        'products.*.qty' => 'required|numeric|min:1',
+        'products.*.price' => 'required|numeric|min:0',
+    ]);
+
+    /* ---------------------- CREATE ORDER ---------------------- */
+    $order = Order::create([
+        'order_amount' => 0,
+        'payment_status' => 'unpaid',
+        'order_status' => $request->order_status,
+        'payment_method' => $request->payment_mode,
+        'date' => $request->order_date,
+        'delivery_date' => $request->delivery_date,
+        'order_note' => $request->comment,
+    ]);
+
+    $total = 0;
+
+    foreach ($request->products as $item) {
+        $lineTotal = $item['qty'] * $item['price'];
+        $total += $lineTotal;
+
+        OrderDetail::create([
+            'order_id' => $order->id,
+            'product_id' => $item['product_id'],
+            'quantity' => $item['qty'],
+            'price' => $item['price'],
+            'tax_amount' => 0,
+            'discount_on_product' => 0,
+            'discount_type' => 'amount',
+            'unit' => 'pc'
+        ]);
+    }
+
+    /* ---------------------- UPDATE ORDER TOTAL ---------------------- */
+    $order->order_amount = $total;
+    $order->save();
+
+    /* ---------------------- PAYMENT ---------------------- */
+    OrderPayment::create([
+        'order_id' => $order->id,
+        'payment_method' => $request->payment_mode,
+        'amount' => $request->paid ?? 0,
+        'payment_date' => now(),
+    ]);
+
+    return redirect()->route('admin.orders.ordermanagement')
+        ->with('success', 'Order created successfully.');
+}
+
 
     /**
      * @param $id

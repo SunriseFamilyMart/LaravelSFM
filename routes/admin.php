@@ -118,6 +118,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('order', [POSController::class, 'placeOrder'])->name('order');
             Route::get('orders', [POSController::class, 'orderList'])->name('orders');
             Route::get('order-details/{id}', [POSController::class, 'orderDetails'])->name('order-details');
+          
             Route::get('invoice/{id}', [POSController::class, 'generateInvoice']);
             Route::any('store-keys', [POSController::class, 'storeKeys'])->name('store-keys');
             Route::get('orders/export', [POSController::class, 'exportOrders'])->name('orders.export');
@@ -230,6 +231,22 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('export/{status}', [OrderController::class, 'exportOrders'])->name('export');
             Route::get('verify-offline-payment/{order_id}/{status}', [OrderController::class, 'verifyOfflinePayment']);
             Route::post('update-order-delivery-area/{order_id}', [OrderController::class, 'updateOrderDeliveryArea'])->name('update-order-delivery-area');
+         Route::get('ordermanagement', [OrderController::class, 'orderManagement'])->name('ordermanagement'); 
+      
+  Route::get('/orders/create', [OrderController::class, 'createOrder'])
+        ->name('orders.create');
+
+    Route::post('/orders/store', [OrderController::class, 'storeOrder'])
+        ->name('orders.store');
+Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
+    ->name('orders.update');
+
+   
+    // AJAX ROUTES (must be inside admin/ )
+     Route::get('/product-price/{id}', [OrderController::class, 'getProductPrice'])
+        ->name('product.price');
+    Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])
+        ->name('supplier.products');
         });
 
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
