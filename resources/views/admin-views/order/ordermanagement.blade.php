@@ -33,7 +33,7 @@
 <div class="card mb-4 shadow-sm">
 <div class="card-body">
 <form method="GET" class="row g-3">
-
+<!-- 
 <div class="col-md-3">
 <label class="form-label fw-bold">Supplier</label>
 <select name="supplier" class="form-control">
@@ -44,7 +44,7 @@
 </option>
 @endforeach
 </select>
-</div>
+</div> -->
 
 <div class="col-md-3">
 <label class="form-label fw-bold">Product</label>
