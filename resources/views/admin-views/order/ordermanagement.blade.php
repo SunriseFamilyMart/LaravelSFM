@@ -26,7 +26,7 @@
 
 {{-- ================= HEADER ================= --}}
 <div class="d-flex align-items-center justify-content-between mb-4">
-    <h3 class="mb-0"><i class="tio-file"></i> Order Management</h3>
+    <h3 class="mb-0"><i class="tio-file"></i> Purchase Management</h3>
 </div>
 
 {{-- ================= FILTER ================= --}}
@@ -259,6 +259,8 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
                             <option value="delivered">Delivered</option>
                             <option value="failed">Delayed</option>
                             <option value="canceled">Cancelled</option>
+                            <option value="ordered">Ordered</option>
+                            <option value="rejected">Rejected</option>
                         </select>
                     </div>
 
