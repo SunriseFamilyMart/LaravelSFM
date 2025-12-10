@@ -56,7 +56,7 @@
 <li class="nav-item {{ Request::is('admin/orders/ordermanagement*') ? 'active' : '' }}">
     <a class="nav-link" href="{{ route('admin.orders.ordermanagement') }}" title="Order Management">
         <i class="tio-file nav-icon"></i>
-        <span class="text-truncate">Order Management</span>
+        <span class="text-truncate">Purchase Management</span>
     </a>
 </li>
 
