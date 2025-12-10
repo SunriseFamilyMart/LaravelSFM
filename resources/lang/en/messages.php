@@ -2932,4 +2932,6 @@
   'sales Manager' => 'Sales Manager',
   'partial' => 'Partial',
   'Order Management' => 'Order Management',
+  'ordered' => 'Ordered',
+  'other' => 'Other',
 );

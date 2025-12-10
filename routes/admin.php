@@ -240,7 +240,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         ->name('orders.store');
 Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
     ->name('orders.update');
-
+ Route::post('update/{id}', [OrderController::class, 'updateOrder'])->name('update');
    
     // AJAX ROUTES (must be inside admin/ )
      Route::get('/product-price/{id}', [OrderController::class, 'getProductPrice'])

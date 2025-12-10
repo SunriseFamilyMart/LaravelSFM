@@ -118,7 +118,6 @@ class OrderController extends Controller
     }
 
 
-
 public function orderManagement(Request $request)
 {
     $supplierId = $request->supplier;
@@ -127,14 +126,13 @@ public function orderManagement(Request $request)
 
     $limit = $request->get('limit', 10);
 
+    // Fetch orders with details and payments
     $orders = Order::with(['details.product.supplier', 'payments'])
         ->when($status, fn ($q) => $q->where('order_status', $status))
         ->whereHas('details', function ($q) use ($productId, $supplierId) {
-
             if ($productId) {
                 $q->where('product_id', $productId);
             }
-
             if ($supplierId) {
                 $q->whereHas('product', function ($p) use ($supplierId) {
                     $p->where('supplier_id', $supplierId);
@@ -142,10 +140,9 @@ public function orderManagement(Request $request)
             }
         })
         ->latest()
-        ->paginate($limit); // ⭐ Pagination added here
+        ->paginate($limit); // Pagination
 
     /* ================= SUMMARY ================= */
-    // items() required because paginate returns LengthAwarePaginator
     $orderCollection = collect($orders->items());
 
     $summary = [
@@ -161,6 +158,14 @@ public function orderManagement(Request $request)
                                 - $orderCollection->sum(fn ($o) => $o->payments->sum('amount')),
     ];
 
+    // You can also prepare invoice/expected delivery mapping if needed
+    // Example: first detail per order
+    foreach ($orders as $order) {
+        $order->first_invoice_number = $order->details->first()?->invoice_number ?? null;
+        $order->first_expected_date = $order->details->first()?->expected_date ?? null;
+        $order->first_order_user = $order->details->first()?->order_user ?? null;
+    }
+
     return view('admin-views.order.ordermanagement', [
         'orders'    => $orders,        // paginator object
         'suppliers' => Supplier::all(),
@@ -168,29 +173,46 @@ public function orderManagement(Request $request)
         'summary'   => $summary
     ]);
 }
+
 public function updateOrder(Request $request, $id)
 {
     $request->validate([
-        'order_status' => 'required',
-        'paid_amount'  => 'nullable|numeric|min:0',
+        'order_status'    => 'required',
+        'paid_amount'     => 'nullable|numeric|min:0',
+        'invoice_number'  => 'nullable|string',
+        'expected_date'   => 'nullable|date',
+        'payment_method'  => 'nullable|string', // optional for future use
     ]);
 
-    $order = Order::with('payments')->findOrFail($id);
+    $order = Order::with('payments', 'orderDetails')->findOrFail($id);
 
-    // Update Status
+    // Update order status
     $order->order_status = $request->order_status;
     $order->save();
 
-    // Add NEW PAYMENT (if provided)
+    // Update order details with invoice_number & expected_date
+    foreach ($order->orderDetails as $detail) {
+        if ($request->filled('invoice_number')) {
+            $detail->invoice_number = $request->invoice_number;
+        }
+        if ($request->filled('expected_date')) {
+            $detail->expected_date = $request->expected_date;
+        }
+        $detail->save();
+    }
+
+    // Add new payment if provided
     if ($request->paid_amount > 0) {
         $order->payments()->create([
             'amount' => $request->paid_amount,
-            'method' => 'manual'
+            'payment_method' => $request->payment_method ?? 'manual',
+            'payment_date' => now(),
         ]);
     }
 
     return back()->with('success', 'Order updated successfully.');
 }
+
 
 public function createOrder()
 {
@@ -212,68 +234,109 @@ public function getProductPrice($id)
 {
     return Product::find($id);
 }
-
-
-public function storeOrder(Request $request)
+  public function storeOrder(Request $request)
 {
     $request->validate([
         'supplier_id' => 'required|exists:suppliers,id',
         'order_date' => 'required|date',
-        'expected_date' => 'required|date',
+        'expected_date' => 'nullable|date',
         'delivery_date' => 'nullable|date',
-        'invoice_no' => 'required',
+        'invoice_no' => 'nullable',
         'order_status' => 'required',
         'payment_mode' => 'required',
         'products.*.product_id' => 'required|exists:products,id',
         'products.*.qty' => 'required|numeric|min:1',
         'products.*.price' => 'required|numeric|min:0',
+            'order_user' => 'nullable|string|max:255', // new
+
     ]);
 
-    /* ---------------------- CREATE ORDER ---------------------- */
+    /** CREATE ORDER */
     $order = Order::create([
         'order_amount' => 0,
         'payment_status' => 'unpaid',
         'order_status' => $request->order_status,
         'payment_method' => $request->payment_mode,
         'date' => $request->order_date,
+        'expected_date' => $request->expected_date,
         'delivery_date' => $request->delivery_date,
+        'invoice_number' => $request->invoice_no,
         'order_note' => $request->comment,
     ]);
 
     $total = 0;
 
+    /** ORDER DETAILS */
     foreach ($request->products as $item) {
-        $lineTotal = $item['qty'] * $item['price'];
+
+        $product = Product::find($item['product_id']);
+
+        $lineTotal = $item['price'] * $item['qty'];
         $total += $lineTotal;
 
         OrderDetail::create([
             'order_id' => $order->id,
-            'product_id' => $item['product_id'],
-            'quantity' => $item['qty'],
+            'product_id' => $product->id,
             'price' => $item['price'],
+            'quantity' => $item['qty'],
             'tax_amount' => 0,
             'discount_on_product' => 0,
             'discount_type' => 'amount',
-            'unit' => 'pc'
+            'unit' => $product->unit,
+            'delivery_date' => $request->delivery_date,
+            'expected_date' => $request->expected_date,
+            'invoice_number' => $request->invoice_no,
+            'vat_status' => "excluded",
+             'order_user' => $request->order_user, 
         ]);
     }
 
-    /* ---------------------- UPDATE ORDER TOTAL ---------------------- */
+    /** UPDATE ORDER TOTAL */
     $order->order_amount = $total;
     $order->save();
 
-    /* ---------------------- PAYMENT ---------------------- */
+    /** PAYMENT LOGIC */
+    $paid = $request->paid ?? 0;
+    $balance = $total - $paid;
+
+    if ($request->payment_mode == "credit_sale") {
+
+        // FULL PAY in credit_sale → store everything in first_payment
+        if ($paid >= $total) {
+            $firstPayment = $total;
+            $secondPayment = 0;
+        } else {
+            $firstPayment = $paid;
+            $secondPayment = $balance;
+        }
+
+        $paymentStatus = "incomplete";
+
+    } else {
+
+        // cash, upi, other
+        $firstPayment = $paid;
+        $secondPayment = 0;
+
+        $paymentStatus = ($paid >= $total) ? "complete" : "incomplete";
+    }
+
+    /** STORE PAYMENT */
     OrderPayment::create([
         'order_id' => $order->id,
         'payment_method' => $request->payment_mode,
-        'amount' => $request->paid ?? 0,
+        'amount' => $paid,
+        'first_payment' => $firstPayment,
+        'second_payment' => $secondPayment,
+        'first_payment_date' => now(),
+        'second_payment_date' => ($secondPayment > 0 ? now() : null),
+        'payment_status' => $paymentStatus,
         'payment_date' => now(),
     ]);
 
     return redirect()->route('admin.orders.ordermanagement')
         ->with('success', 'Order created successfully.');
 }
-
 
     /**
      * @param $id

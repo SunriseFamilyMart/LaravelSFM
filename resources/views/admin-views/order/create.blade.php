@@ -63,7 +63,7 @@
 
     <div class="col-md-3">
         <label>Expected Date</label>
-        <input type="date" name="expected_date" class="form-control" required>
+        <input type="date" name="expected_date" class="form-control" >
     </div>
 
     <div class="col-md-3">
@@ -73,7 +73,7 @@
 
     <div class="col-md-3">
         <label>Invoice No</label>
-        <input type="text" name="invoice_no" class="form-control" required>
+        <input type="text" name="invoice_no" class="form-control" >
     </div>
 </div>
 
@@ -104,6 +104,11 @@
         <label>Balance</label>
         <input type="number" class="form-control" id="balance" readonly>
     </div>
+    <div class="col-md-3">
+    <label>Order User</label>
+    <input type="text" name="order_user" class="form-control" placeholder="Enter User Name">
+</div>
+
 </div>
 
 <br>
@@ -123,6 +128,7 @@
         <label>Comment</label>
         <input type="text" name="comment" class="form-control">
     </div>
+    
 </div>
 
 <hr>

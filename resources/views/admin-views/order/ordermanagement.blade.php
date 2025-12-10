@@ -114,6 +114,8 @@
 <th>Balance ₹</th>
 <th>Payment</th>
 <th>Note</th>
+<th>Invoice</th>    
+<th>Expected Date</th>
 </tr>
 </thead>
 
@@ -147,9 +149,10 @@ $first = true;
 <td>{{ $detail->product?->supplier?->name ?? '-' }}</td> -->
 
 <td>{{ $detail->product?->name ?? '-' }}</td>
-
 @if($first)
-<td rowspan="{{ $rowspan }}">{{ $order->user?->name ?? 'Admin' }}</td>
+<td rowspan="{{ $rowspan }}">
+    {{ $order->details->first()?->order_user ?? '-' }}
+</td>
 @endif
 
 @if($first)
@@ -193,7 +196,17 @@ $first = true;
 @if($first)
 <td rowspan="{{ $rowspan }}">{{ $order->order_note ?? '-' }}</td>
 @endif
+@if($first)
+<td rowspan="{{ $rowspan }}">
+    {{ $order->details->first()?->invoice_number ?? '-' }}
+</td>
+@endif
 
+@if($first)
+<td rowspan="{{ $rowspan }}">
+    {{ $order->details->first()?->expected_date ? \Carbon\Carbon::parse($order->details->first()->expected_date)->format('d-M-Y') : '-' }}
+</td>
+@endif
 
 </tr>
 @php $first = false; @endphp
@@ -252,6 +265,7 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
 
                 <div class="modal-body">
 
+                    <!-- Order Status -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">Order Status</label>
                         <select class="form-control" name="order_status" id="order_status">
@@ -264,19 +278,40 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
                         </select>
                     </div>
 
+                    <!-- Invoice Number -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Invoice Number</label>
+                        <input type="text" name="invoice_number" id="invoice_number" class="form-control" placeholder="Enter invoice number">
+                    </div>
+
+                    <!-- Expected Delivery Date -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Expected Delivery Date</label>
+                        <input type="date" name="expected_date" id="expected_date" class="form-control">
+                    </div>
+
+                    <!-- Add Payment -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">Add Payment (₹)</label>
-                        <input type="number" name="paid_amount"
-                               id="paid_amount" class="form-control"
-                               placeholder="Enter paid amount">
+                        <input type="number" name="paid_amount" id="paid_amount" class="form-control" placeholder="Enter paid amount">
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Payment Method</label>
+                        <select class="form-control" name="payment_method" id="payment_method">
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
+                            <option value="credit_sale">Credit Sale</option>
+                            <option value="other">Other</option>
+                        </select>
                     </div>
 
                 </div>
 
                 <div class="modal-footer">
                     <button class="btn btn-primary" type="submit">Update</button>
-                    <button type="button" class="btn btn-secondary"
-                            data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
 
             </div>

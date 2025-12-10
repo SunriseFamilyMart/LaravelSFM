@@ -22,6 +22,9 @@ class OrderDetail extends Model
         'time_slot_id',
         'delivery_date',
         'vat_status',
+          'invoice_number',
+         'expected_date',
+         'order_user',
     ];
 
     protected $casts = [
