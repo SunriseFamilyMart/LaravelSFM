@@ -2934,4 +2934,5 @@
   'Order Management' => 'Order Management',
   'ordered' => 'Ordered',
   'other' => 'Other',
+  'rejected' => 'Rejected',
 );

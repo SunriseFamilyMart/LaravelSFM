@@ -167,6 +167,10 @@ $first = true;
 <span class="status-badge badge-progress">Processing</span>
 @elseif($order->order_status=='failed')
 <span class="status-badge badge-delayed">Delayed</span>
+elseif($order->order_status=='rejected')
+<span class="status-badge badge-delayed">Rejected</span>
+elseif($order->order_status=='ordered')
+<span class="status-badge badge-progress">Ordered</span>
 @else
 <span class="status-badge badge-cancel">{{ ucfirst($order->order_status) }}</span>
 @endif

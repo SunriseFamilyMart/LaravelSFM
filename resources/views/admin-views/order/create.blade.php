@@ -87,6 +87,8 @@
             <option value="processing">In Progress</option>
             <option value="pending">Pending</option>
             <option value="failed">Delayed</option>
+            <option value="ordered">Ordered</option>
+            <option value="rejected">Rejected</option>
         </select>
     </div>
 
