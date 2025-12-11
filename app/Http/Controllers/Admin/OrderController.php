@@ -234,7 +234,7 @@ public function getProductPrice($id)
 {
     return Product::find($id);
 }
-  public function storeOrder(Request $request)
+public function storeOrder(Request $request)
 {
     $request->validate([
         'supplier_id' => 'required|exists:suppliers,id',
@@ -247,8 +247,7 @@ public function getProductPrice($id)
         'products.*.product_id' => 'required|exists:products,id',
         'products.*.qty' => 'required|numeric|min:1',
         'products.*.price' => 'required|numeric|min:0',
-            'order_user' => 'nullable|string|max:255', // new
-
+        'order_user' => 'nullable|string|max:255',
     ]);
 
     /** CREATE ORDER */
@@ -271,9 +270,33 @@ public function getProductPrice($id)
 
         $product = Product::find($item['product_id']);
 
+        /** LINE TOTAL */
         $lineTotal = $item['price'] * $item['qty'];
         $total += $lineTotal;
 
+        /** REQUIRED FINAL FORMAT (RAW STRINGS, NO ARRAY DECODE) */
+        $productDetails = [
+            "id" => $product->id,
+            "name" => $product->name,
+            "description" => $product->description,
+            "image" => $product->image,              // RAW JSON STRING
+            "price" => $product->price,
+            "variations" => $product->variations,    // RAW JSON STRING
+            "tax" => $product->tax,
+            "status" => $product->status,
+            "attributes" => $product->attributes,    // RAW JSON STRING
+            "category_ids" => $product->category_ids, // RAW JSON STRING
+            "choice_options" => $product->choice_options, // RAW JSON STRING
+            "discount" => $product->discount,
+            "discount_type" => $product->discount_type,
+            "tax_type" => $product->tax_type,
+            "unit" => $product->unit,
+            "total_stock" => $product->total_stock,
+            "capacity" => $product->capacity,
+            "weight" => $product->weight,
+        ];
+
+        /** STORE ORDER DETAILS */
         OrderDetail::create([
             'order_id' => $order->id,
             'product_id' => $product->id,
@@ -287,7 +310,12 @@ public function getProductPrice($id)
             'expected_date' => $request->expected_date,
             'invoice_number' => $request->invoice_no,
             'vat_status' => "excluded",
-             'order_user' => $request->order_user, 
+            'variation' => json_encode([]),
+            /** CLEAN JSON — NO PRETTY PRINT, NO SLASHES */
+            'product_details' =>   $productDetails,
+
+
+            'order_user' => $request->order_user,
         ]);
     }
 
@@ -301,7 +329,6 @@ public function getProductPrice($id)
 
     if ($request->payment_mode == "credit_sale") {
 
-        // FULL PAY in credit_sale → store everything in first_payment
         if ($paid >= $total) {
             $firstPayment = $total;
             $secondPayment = 0;
@@ -313,11 +340,8 @@ public function getProductPrice($id)
         $paymentStatus = "incomplete";
 
     } else {
-
-        // cash, upi, other
         $firstPayment = $paid;
         $secondPayment = 0;
-
         $paymentStatus = ($paid >= $total) ? "complete" : "incomplete";
     }
 

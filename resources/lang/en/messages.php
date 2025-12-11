@@ -2935,4 +2935,5 @@
   'ordered' => 'Ordered',
   'other' => 'Other',
   'rejected' => 'Rejected',
+  'credit sale' => 'Credit sale',
 );
