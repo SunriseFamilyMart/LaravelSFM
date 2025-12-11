@@ -342,30 +342,29 @@ class DeliverymanController extends Controller
 // }
 public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
 {
-    // 🔐 Get token from header
-    $token = $request->header('Authorization');
+    // 1️⃣ Validate token
+    $validator = Validator::make($request->all(), [
+        'token' => 'required'
+    ]);
 
-    if (!$token) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Unauthorized. Token missing.'
-        ], 401);
+    if ($validator->fails()) {
+        return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
-    // 🔍 Validate deliveryman token
-    $deliveryman = DeliveryMan::where('auth_token', $token)->first();
-
+    // 2️⃣ Check deliveryman token
+    $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
     if (!$deliveryman) {
         return response()->json([
-            'success' => false,
-            'message' => 'Unauthorized. Invalid token.'
+            'errors' => [
+                ['code' => '401', 'message' => 'Invalid token!']
+            ]
         ], 401);
     }
 
-    // ✔ deliveryman is valid
+    // 🔥 Use correct deliveryman_id from token
     $deliverymanId = $deliveryman->id;
 
-    // Fetch orders for this deliveryman
+    // 3️⃣ Fetch current orders
     $orders = $this->order->with([
             'delivery_address',
             'customer',
@@ -376,15 +375,16 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ->where('delivery_man_id', $deliverymanId)
         ->get();
 
+    // 4️⃣ Transform
     $orders->transform(function ($order) {
 
-        // Fix tax when order_amount is zero
+        // Fix tax when order amount is zero
         if ($order->order_amount == 0) {
             $order->update(['total_tax_amount' => 0]);
             $order->total_tax_amount = 0;
         }
 
-        // Map store address when delivery_address missing
+        // Map store address if delivery_address is missing
         if (empty($order->delivery_address) && $order->store) {
             $order->delivery_address = [
                 'id' => $order->store->id,
@@ -399,7 +399,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             ];
         }
 
-        // 🔥 Arrear calculation (your exact SQL)
+        // 🔥 MAIN FIX — Your SQL pending logic exactly as given
         $result = DB::table('orders as o')
             ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
             ->where('o.id', $order->id)
