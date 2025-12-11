@@ -298,6 +298,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ->where('delivery_man_id', $deliveryman->id)
         ->get();
 
+    // 4️⃣ Transform orders
     $orders->transform(function ($order) {
 
         // a) If order_amount = 0 → total_tax_amount = 0
