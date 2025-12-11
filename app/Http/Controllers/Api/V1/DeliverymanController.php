@@ -265,28 +265,107 @@ class DeliverymanController extends Controller
      * @return JsonResponse
      */
  
+// public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
+// {
+//     // 1️⃣ Validate token
+//     $validator = Validator::make($request->all(), [
+//         'token' => 'required'
+//     ]);
+
+//     if ($validator->fails()) {
+//         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+//     }
+
+//     // 2️⃣ Check deliveryman token
+//     $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
+//     if (!$deliveryman) {
+//         return response()->json([
+//             'errors' => [
+//                 ['code' => '401', 'message' => 'Invalid token!']
+//             ]
+//         ], 401);
+//     }
+
+//     // 3️⃣ Fetch orders assigned to this deliveryman
+//     $orders = $this->order->with([
+//             'delivery_address',
+//             'customer',
+//             'partial_payment',
+//             'order_image',
+//             'store'
+//         ])
+        
+//         ->where('delivery_man_id', $deliveryman->id)
+//         ->get();
+
+//     // 4️⃣ Transform orders
+//     $orders->transform(function ($order) {
+
+//         // a) If order_amount = 0 → total_tax_amount = 0
+//         if ($order->order_amount == 0) {
+//             $order->total_tax_amount = 0;
+//             $order->update(['total_tax_amount' => 0]);
+//         }
+
+//         // b) Map store address if delivery_address is missing
+//         if (!$order->delivery_address && $order->store) {
+//             $order->delivery_address = [
+//                 'id' => $order->store->id,
+//                 'address_type' => 'Store',
+//                 'store_name' => $order->store->store_name,
+//                 'contact_person_name' => $order->store->customer_name ?? null,
+//                 'contact_person_number' => $order->store->phone_number ?? null,
+//                 'address' => $order->store->address ?? null,
+//                 'latitude' => $order->store->latitude,
+//                 'longitude' => $order->store->longitude,
+//                 'landmark' => $order->store->landmark ?? null
+//             ];
+//         }
+
+//         // c) Add arrear_amount (Store-level arrears)
+//         if ($order->store_id) {
+//             $arrear = DB::table('orders as o')
+//                 ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+//                 ->where('o.store_id', $order->store_id)
+//                 ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
+//                 ->first();
+
+//             $order->arrear_amount = $arrear->arrear_amount ?? 0;
+//         } else {
+//             $order->arrear_amount = 0;
+//         }
+
+//         return $order;
+//     });
+
+//     return response()->json($orders, 200);
+// }
 public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
 {
-    // 1️⃣ Validate token
-    $validator = Validator::make($request->all(), [
-        'token' => 'required'
-    ]);
+    // 🔐 Get token from header
+    $token = $request->header('Authorization');
 
-    if ($validator->fails()) {
-        return response()->json(['errors' => Helpers::error_processor($validator)], 403);
-    }
-
-    // 2️⃣ Check deliveryman token
-    $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
-    if (!$deliveryman) {
+    if (!$token) {
         return response()->json([
-            'errors' => [
-                ['code' => '401', 'message' => 'Invalid token!']
-            ]
+            'success' => false,
+            'message' => 'Unauthorized. Token missing.'
         ], 401);
     }
 
-    // 3️⃣ Fetch orders assigned to this deliveryman
+    // 🔍 Validate deliveryman token
+    $deliveryman = DeliveryMan::where('auth_token', $token)->first();
+
+    if (!$deliveryman) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized. Invalid token.'
+        ], 401);
+    }
+
+    // ✔ deliveryman is valid
+    $deliverymanId = $deliveryman->id;
+
+    // Fetch orders for this deliveryman
     $orders = $this->order->with([
             'delivery_address',
             'customer',
@@ -294,21 +373,19 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'order_image',
             'store'
         ])
-        
-        ->where('delivery_man_id', $deliveryman->id)
+        ->where('delivery_man_id', $deliverymanId)
         ->get();
 
-    // 4️⃣ Transform orders
     $orders->transform(function ($order) {
 
-        // a) If order_amount = 0 → total_tax_amount = 0
+        // Fix tax when order_amount is zero
         if ($order->order_amount == 0) {
-            $order->total_tax_amount = 0;
             $order->update(['total_tax_amount' => 0]);
+            $order->total_tax_amount = 0;
         }
 
-        // b) Map store address if delivery_address is missing
-        if (!$order->delivery_address && $order->store) {
+        // Map store address when delivery_address missing
+        if (empty($order->delivery_address) && $order->store) {
             $order->delivery_address = [
                 'id' => $order->store->id,
                 'address_type' => 'Store',
@@ -322,25 +399,24 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             ];
         }
 
-        // c) Add arrear_amount (Store-level arrears)
-        if ($order->store_id) {
-            $arrear = DB::table('orders as o')
-                ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
-                ->where('o.store_id', $order->store_id)
-                ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
-                ->first();
+        // 🔥 Arrear calculation (your exact SQL)
+        $result = DB::table('orders as o')
+            ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+            ->where('o.id', $order->id)
+            ->selectRaw("
+                o.order_amount,
+                COALESCE(op.first_payment, 0) AS first_payment,
+                (o.order_amount - COALESCE(op.first_payment, 0)) AS pending_amount
+            ")
+            ->first();
 
-            $order->arrear_amount = $arrear->arrear_amount ?? 0;
-        } else {
-            $order->arrear_amount = 0;
-        }
+        $order->arrear_amount = $result->pending_amount ?? 0;
 
         return $order;
     });
 
     return response()->json($orders, 200);
 }
-
 
 
     /**
