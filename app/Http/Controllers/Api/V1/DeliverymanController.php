@@ -294,7 +294,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'order_image',
             'store'
         ])
-        ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'out_for_delivery'])
+        
         ->where('delivery_man_id', $deliveryman->id)
         ->get();
 
