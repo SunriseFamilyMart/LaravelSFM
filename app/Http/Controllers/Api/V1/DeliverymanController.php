@@ -286,7 +286,10 @@ class DeliverymanController extends Controller
 //         ], 401);
 //     }
 
-//     // 3️⃣ Fetch orders assigned to this deliveryman
+   
+//     $deliverymanId = $deliveryman->id;
+
+//     // 3️⃣ Fetch current orders
 //     $orders = $this->order->with([
 //             'delivery_address',
 //             'customer',
@@ -294,21 +297,20 @@ class DeliverymanController extends Controller
 //             'order_image',
 //             'store'
 //         ])
-        
-//         ->where('delivery_man_id', $deliveryman->id)
+//         ->where('delivery_man_id', $deliverymanId)
 //         ->get();
 
-//     // 4️⃣ Transform orders
+//     // 4️⃣ Transform
 //     $orders->transform(function ($order) {
 
-//         // a) If order_amount = 0 → total_tax_amount = 0
+//         // Fix tax when order amount is zero
 //         if ($order->order_amount == 0) {
-//             $order->total_tax_amount = 0;
 //             $order->update(['total_tax_amount' => 0]);
+//             $order->total_tax_amount = 0;
 //         }
 
-//         // b) Map store address if delivery_address is missing
-//         if (!$order->delivery_address && $order->store) {
+//         // Map store address if delivery_address is missing
+//         if (empty($order->delivery_address) && $order->store) {
 //             $order->delivery_address = [
 //                 'id' => $order->store->id,
 //                 'address_type' => 'Store',
@@ -322,18 +324,18 @@ class DeliverymanController extends Controller
 //             ];
 //         }
 
-//         // c) Add arrear_amount (Store-level arrears)
-//         if ($order->store_id) {
-//             $arrear = DB::table('orders as o')
-//                 ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
-//                 ->where('o.store_id', $order->store_id)
-//                 ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
-//                 ->first();
+//         // 🔥 MAIN FIX — Your SQL pending logic exactly as given
+//         $result = DB::table('orders as o')
+//             ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+//             ->where('o.id', $order->id)
+//             ->selectRaw("
+//                 o.order_amount,
+//                 COALESCE(op.first_payment, 0) AS first_payment,
+//                 (o.order_amount - COALESCE(op.first_payment, 0)) AS pending_amount
+//             ")
+//             ->first();
 
-//             $order->arrear_amount = $arrear->arrear_amount ?? 0;
-//         } else {
-//             $order->arrear_amount = 0;
-//         }
+//         $order->arrear_amount = $result->pending_amount ?? 0;
 
 //         return $order;
 //     });
@@ -342,7 +344,7 @@ class DeliverymanController extends Controller
 // }
 public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
 {
-    // 1️⃣ Validate token
+  
     $validator = Validator::make($request->all(), [
         'token' => 'required'
     ]);
@@ -351,7 +353,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
-    // 2️⃣ Check deliveryman token
+ 
     $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
     if (!$deliveryman) {
         return response()->json([
@@ -361,10 +363,9 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ], 401);
     }
 
-    // 🔥 Use correct deliveryman_id from token
     $deliverymanId = $deliveryman->id;
 
-    // 3️⃣ Fetch current orders
+  
     $orders = $this->order->with([
             'delivery_address',
             'customer',
@@ -375,16 +376,16 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ->where('delivery_man_id', $deliverymanId)
         ->get();
 
-    // 4️⃣ Transform
+   
     $orders->transform(function ($order) {
 
-        // Fix tax when order amount is zero
+      
         if ($order->order_amount == 0) {
             $order->update(['total_tax_amount' => 0]);
             $order->total_tax_amount = 0;
         }
 
-        // Map store address if delivery_address is missing
+      
         if (empty($order->delivery_address) && $order->store) {
             $order->delivery_address = [
                 'id' => $order->store->id,
@@ -399,14 +400,15 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             ];
         }
 
-        // 🔥 MAIN FIX — Your SQL pending logic exactly as given
+        // 🔥 Arrear calculation: (order_amount + total_tax_amount) - first_payment
         $result = DB::table('orders as o')
             ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
             ->where('o.id', $order->id)
             ->selectRaw("
                 o.order_amount,
+                o.total_tax_amount,
                 COALESCE(op.first_payment, 0) AS first_payment,
-                (o.order_amount - COALESCE(op.first_payment, 0)) AS pending_amount
+                ( (o.order_amount + o.total_tax_amount) - COALESCE(op.first_payment, 0) ) AS pending_amount
             ")
             ->first();
 
@@ -417,6 +419,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
     return response()->json($orders, 200);
 }
+
 
 
     /**
