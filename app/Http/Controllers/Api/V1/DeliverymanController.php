@@ -407,11 +407,11 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
                 o.order_amount,
                 o.total_tax_amount,
                 COALESCE(op.first_payment, 0) AS first_payment,
-                ((o.order_amount + o.total_tax_amount) - COALESCE(op.first_payment, 0)) AS pending_amount
+                ((o.order_amount + o.total_tax_amount) - COALESCE(op.amount, 0)) AS pending_amount
             ")
             ->first();
 
-        $order->first_payment = $result->first_payment ?? 0;
+        $order->amount = $result->amount ?? 0;
         $order->arrear_amount = $result->pending_amount ?? 0;
 
         return $order;
