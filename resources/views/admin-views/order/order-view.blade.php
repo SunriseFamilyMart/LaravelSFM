@@ -41,23 +41,26 @@
                             @if ($order->payments && $order->payments->count() > 0)
                                 <div class="card p-3 mb-3 shadow-sm">
                                     <h5 class="mb-3"><strong>Payment Summary</strong></h5>
+<p class="mb-1">
+    <strong>Total Order Value: </strong>
+    ₹{{ number_format($order->order_amount + $order->total_tax_amount, 2) }}
+</p>
 
-                                    <p class="mb-1">
-                                        <strong>Total Order Value: </strong>
-                                        ₹{{ number_format($order->order_amount + $order->total_tax_amount, 2) }}
-                                    </p>
+<p class="mb-1">
+    <strong>Total Paid: </strong>
+    @php
+        $totalPaid = $order->payments->sum('amount'); // sum all payments
+    @endphp
+    ₹{{ number_format($totalPaid, 2) }}
+</p>
 
-                                    <p class="mb-1">
-                                        <strong>Total Paid: </strong>
-                                        ₹{{ number_format($order->payments->where('payment_status', 'complete')->sum('amount'), 2) }}
-                                    </p>
+<p class="mb-1">
+    <strong>Remaining Due: </strong>
+    <span class="badge bg-warning text-dark px-3 py-1">
+        ₹{{ number_format(($order->order_amount + $order->total_tax_amount) - $totalPaid, 2) }}
+    </span>
+</p>
 
-                                    <p class="mb-1">
-                                        <strong>Remaining Due: </strong>
-                                        <span class="badge bg-warning text-dark px-3 py-1">
-                                            ₹{{ number_format($order->payments->where('payment_status', 'incomplete')->sum('amount'), 2) }}
-                                        </span>
-                                    </p>
 
                                     {{-- Optional collected list toggle --}}
                                     <details class="mt-3">
