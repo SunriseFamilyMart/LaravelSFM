@@ -260,11 +260,14 @@
                                 </th>
                                 <th class="table-column-pl-0">{{ translate('order ID') }}</th>
                                 <th>{{ translate('Delivery') }} {{ translate('date') }}</th>
-                                <th>{{ translate('Deliveryman') }}
+                                <th>{{ translate('Deliveryman') }}</th>
+                                
                                 <th>{{ translate('Time Slot') }}</th>
                                 <th>{{ translate('customer') }}</th>
                                 <th>{{ translate('branch') }}</th>
                                 <th>{{ translate('total amount') }}</th>
+                               <th>{{ translate('Paid Amount') }}</th>
+                                           
                                 <th>
                                     <div class="text-center">
                                         {{ translate('order') }} {{ translate('status') }}
@@ -369,6 +372,26 @@
                                             @endif
                                         </div>
                                     </td>
+                                    <td>
+    @php
+        $completedPayments = $order->payments
+            ->where('payment_status', 'complete');
+    @endphp
+
+    @if($completedPayments->isEmpty())
+        -
+    @else
+        <ul class="mb-0">
+            @foreach($completedPayments as $payment)
+                <li>
+                    {{ ucfirst($payment->payment_method) }}: ₹{{ number_format($payment->amount, 2) }}
+                    
+                </li>
+            @endforeach
+        </ul>
+    @endif
+</td>
+
                                     <td class="text-capitalize text-center">
                                         @if ($order['order_status'] == 'pending')
                                             <span class="badge badge-soft-info">

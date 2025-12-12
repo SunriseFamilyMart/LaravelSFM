@@ -2939,4 +2939,6 @@
   'Unpaid' => 'Unpaid',
   'Deliveryman' => 'Deliveryman',
   'No Delivery Date' => 'No Delivery Date',
+  'Paid Amount' => 'Paid Amount',
+  'Paid' => 'Paid',
 );
