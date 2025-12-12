@@ -34,47 +34,73 @@
         <div class="card">
             <div class="card-header shadow flex-wrap p-20px border-0">
                 <h5 class="form-bold w-100 mb-3">{{ translate('Select Date Range') }}</h5>
-                <form class="w-100">
-                    <div class="row g-3 g-sm-4 g-md-3 g-lg-4">
-                        <div class="col-sm-6 col-md-4 col-lg-2">
-                            <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="branch_id">
-                                <option disabled>--- {{ translate('select') }} {{ translate('branch') }} ---</option>
-                                <option value="all" {{ $branchId == 'all' ? 'selected' : '' }}>{{ translate('all') }}
-                                    {{ translate('branch') }}</option>
-                                @foreach ($branches as $branch)
-                                    <option value="{{ $branch['id'] }}"
-                                        {{ $branch['id'] == $branchId ? 'selected' : '' }}>{{ $branch['name'] }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-sm-6 col-md-4 col-lg-3">
-                            <div class="input-date-group">
-                                <label class="input-label" for="start_date">{{ translate('Start Date') }}</label>
-                                <label class="input-date">
-                                    <input type="text" id="start_date" name="start_date" value="{{ $startDate }}"
-                                        class="js-flatpickr form-control flatpickr-custom min-h-45px" placeholder="yy-mm-dd"
-                                        data-hs-flatpickr-options='{ "dateFormat": "Y-m-d"}'>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-md-4 col-lg-3">
-                            <div class="input-date-group">
-                                <label class="input-label" for="end_date">{{ translate('End Date') }}</label>
-                                <label class="input-date">
-                                    <input type="text" id="end_date" name="end_date" value="{{ $endDate }}"
-                                        class="js-flatpickr form-control flatpickr-custom min-h-45px" placeholder="yy-mm-dd"
-                                        data-hs-flatpickr-options='{ "dateFormat": "Y-m-d"}'>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="col-sm-6 col-md-12 col-lg-4 __btn-row">
-                            <a href="{{ route('admin.orders.list', ['all']) }}"
-                                class="btn w-100 btn--reset min-h-45px">{{ translate('clear') }}</a>
-                            <button type="submit" id="show_filter_data"
-                                class="btn w-100 btn--primary min-h-45px">{{ translate('show data') }}</button>
+            <form class="w-100" method="GET" action="{{ route('admin.orders.list', [$status ?? 'all']) }}">
+                <div class="row g-3 g-sm-4 g-md-3 g-lg-4">
+
+                    <!-- Branch Filter -->
+                    <div class="col-sm-6 col-md-4 col-lg-2">
+                        <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="branch_id">
+                            <option disabled>--- {{ translate('select') }} {{ translate('branch') }} ---</option>
+                            <option value="all" {{ ($branchId ?? '') == 'all' ? 'selected' : '' }}>{{ translate('all') }} {{ translate('branch') }}</option>
+                            @foreach ($branches as $branch)
+                                <option value="{{ $branch['id'] }}" {{ ($branchId ?? '') == $branch['id'] ? 'selected' : '' }}>
+                                    {{ $branch['name'] }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Delivery Man Filter -->
+                    <div class="col-sm-6 col-md-4 col-lg-2">
+                        <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="delivery_man_id">
+                            <option disabled selected>--- {{ translate('select') }} {{ translate('delivery_man') }} ---</option>
+                            <option value="all" {{ ($deliveryManId ?? '') == 'all' ? 'selected' : '' }}>All Delivery Man</option>
+                            @foreach ($deliveryMen as $dm)
+                                <option value="{{ $dm->id }}" {{ ($deliveryManId ?? '') == $dm->id ? 'selected' : '' }}>
+                                    {{ $dm->f_name }} {{ $dm->l_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Payment Method Filter -->
+                    <div class="col-sm-6 col-md-4 col-lg-2">
+                        <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="payment_method">
+                            <option disabled selected>--- {{ translate('select') }} {{ translate('payment_method') }} ---</option>
+                            <option value="all" {{ ($paymentMethod ?? '') == 'all' ? 'selected' : '' }}>All</option>
+                            <option value="cash" {{ ($paymentMethod ?? '') == 'cash' ? 'selected' : '' }}>Cash</option>
+                            <option value="upi" {{ ($paymentMethod ?? '') == 'upi' ? 'selected' : '' }}>UPI</option>
+                            <option value="credit_sale" {{ ($paymentMethod ?? '') == 'credit_sale' ? 'selected' : '' }}>Credit Sale</option>
+                        </select>
+                    </div>
+
+                    <!-- Date Range -->
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <div class="input-date-group">
+                            <label class="input-label" for="start_date">{{ translate('Start Date') }}</label>
+                            <input type="text" id="start_date" name="start_date" value="{{ $startDate ?? '' }}"
+                                class="js-flatpickr form-control flatpickr-custom min-h-45px" placeholder="yy-mm-dd"
+                                data-hs-flatpickr-options='{ "dateFormat": "Y-m-d"}'>
                         </div>
                     </div>
-                </form>
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <div class="input-date-group">
+                            <label class="input-label" for="end_date">{{ translate('End Date') }}</label>
+                            <input type="text" id="end_date" name="end_date" value="{{ $endDate ?? '' }}"
+                                class="js-flatpickr form-control flatpickr-custom min-h-45px" placeholder="yy-mm-dd"
+                                data-hs-flatpickr-options='{ "dateFormat": "Y-m-d"}'>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="col-sm-6 col-md-12 col-lg-4 __btn-row">
+                        <a href="{{ route('admin.orders.list', ['all']) }}" class="btn w-100 btn--reset min-h-45px">{{ translate('clear') }}</a>
+                        <button type="submit" class="btn w-100 btn--primary min-h-45px">{{ translate('show data') }}</button>
+                    </div>
+
+                </div>
+            </form>
+
             </div>
 
             @if ($status == 'all')

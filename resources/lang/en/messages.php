@@ -2941,4 +2941,6 @@
   'No Delivery Date' => 'No Delivery Date',
   'Paid Amount' => 'Paid Amount',
   'Paid' => 'Paid',
+  'delivery_man' => 'Delivery man',
+  'payment_method' => 'Payment method',
 );

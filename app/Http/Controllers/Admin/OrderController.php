@@ -59,64 +59,102 @@ class OrderController extends Controller
      * @param $status
      * @return Factory|View|Application
      */
-    public function list(Request $request, $status): View|Factory|Application
-    {
-        $queryParam = [];
-        $search = $request['search'];
+  public function list(Request $request, $status): View|Factory|Application
+{
+    $queryParam = [];
+    $search = $request['search'] ?? null;
 
-        $branches = $this->branch->all();
-        $branchId = $request['branch_id'];
-        $startDate = $request['start_date'];
-        $endDate = $request['end_date'];
+    $branches = $this->branch->all();
+    $branchId = $request['branch_id'] ?? 'all';
+    $deliveryManId = $request['delivery_man_id'] ?? 'all';
+  $deliveryMen = $this->delivery_man->all();
 
-        $this->order->where(['checked' => 0])->update(['checked' => 1]);
+    $paymentMethod = $request['payment_method'] ?? 'all';
+    $startDate = $request['start_date'] ?? null;
+    $endDate = $request['end_date'] ?? null;
 
-        $query = $this->order->with(['customer', 'branch', 'delivery_man'])
+    // Mark unchecked orders as checked
+    $this->order->where(['checked' => 0])->update(['checked' => 1]);
 
-            ->when((!is_null($branchId) && $branchId != 'all'), function ($query) use ($branchId) {
-                return $query->where('branch_id', $branchId);
-            })->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
-                return $query->whereDate('created_at', '>=', $startDate)
-                    ->whereDate('created_at', '<=', $endDate);
+    $query = $this->order->with(['customer', 'branch', 'delivery_man', 'payments'])
+
+        // Branch filter
+        ->when(($branchId && $branchId != 'all'), function ($query) use ($branchId) {
+            return $query->where('branch_id', $branchId);
+        })
+
+        // Date range filter
+        ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+            return $query->whereDate('created_at', '>=', $startDate)
+                         ->whereDate('created_at', '<=', $endDate);
+        })
+
+        // Delivery Man filter
+        ->when($deliveryManId && $deliveryManId != 'all', function ($query) use ($deliveryManId) {
+            return $query->where('delivery_man_id', $deliveryManId);
+        })
+
+        // Payment Method filter
+        ->when($paymentMethod && $paymentMethod != 'all', function ($query) use ($paymentMethod) {
+            return $query->whereHas('payments', function ($q) use ($paymentMethod) {
+                $q->where('payment_method', $paymentMethod);
             });
+        });
 
-        if ($status != 'all') {
-            $query->where(['order_status' => $status]);
-        }
-
-        $queryParam = ['branch_id' => $branchId, 'start_date' => $startDate, 'end_date' => $endDate];
-
-        if ($request->has('search')) {
-            $key = explode(' ', $request['search']);
-            $query->where(function ($q) use ($key) {
-                foreach ($key as $value) {
-                    $q->orWhere('id', 'like', "%{$value}%")
-                        ->orWhere('order_status', 'like', "%{$value}%")
-                        ->orWhere('payment_status', 'like', "{$value}%");
-                }
-            });
-            $queryParam['search'] = $search;
-        }
-
-        $orders = $query->notPos()->orderBy('id', 'desc')->paginate(Helpers::getPagination())->appends($queryParam);
-
-        $countData = [];
-        $orderStatuses = ['pending', 'confirmed', 'processing', 'out_for_delivery', 'delivered', 'canceled', 'returned', 'failed'];
-
-        foreach ($orderStatuses as $orderStatus) {
-            $countData[$orderStatus] = $this->order->notPos()->where('order_status', $orderStatus)
-                ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
-                    return $query->where('branch_id', $branchId);
-                })
-                ->when(!is_null($startDate) && !is_null($endDate), function ($query) use ($startDate, $endDate) {
-                    return $query->whereDate('created_at', '>=', $startDate)
-                        ->whereDate('created_at', '<=', $endDate);
-                })
-                ->count();
-        }
-
-        return view('admin-views.order.list', compact('orders', 'status', 'search', 'branches', 'branchId', 'startDate', 'endDate', 'countData'));
+    // Order status filter
+    if ($status != 'all') {
+        $query->where(['order_status' => $status]);
     }
+
+    // Search filter
+    if ($request->has('search')) {
+        $key = explode(' ', $request['search']);
+        $query->where(function ($q) use ($key) {
+            foreach ($key as $value) {
+                $q->orWhere('id', 'like', "%{$value}%")
+                  ->orWhere('order_status', 'like', "%{$value}%")
+                  ->orWhere('payment_status', 'like', "{$value}%");
+            }
+        });
+        $queryParam['search'] = $search;
+    }
+
+    // Prepare query params for pagination links
+    $queryParam = array_merge($queryParam, [
+        'branch_id' => $branchId,
+        'delivery_man_id' => $deliveryManId,
+        'payment_method' => $paymentMethod,
+        'start_date' => $startDate,
+        'end_date' => $endDate,
+    ]);
+
+    $orders = $query->notPos()
+                    ->orderBy('id', 'desc')
+                    ->paginate(Helpers::getPagination())
+                    ->appends($queryParam);
+
+    // Count orders by status (keeping old functionality)
+    $countData = [];
+    $orderStatuses = ['pending', 'confirmed', 'processing', 'out_for_delivery', 'delivered', 'canceled', 'returned', 'failed'];
+
+    foreach ($orderStatuses as $orderStatus) {
+        $countData[$orderStatus] = $this->order->notPos()
+            ->where('order_status', $orderStatus)
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            })
+            ->when(!is_null($startDate) && !is_null($endDate), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                             ->whereDate('created_at', '<=', $endDate);
+            })
+            ->count();
+    }
+
+    return view('admin-views.order.list', compact(
+        'orders', 'status', 'search', 'branches', 'branchId', 'deliveryManId',
+        'paymentMethod', 'startDate', 'endDate', 'countData','deliveryMen'
+    ));
+}
 
 
 public function orderManagement(Request $request)
