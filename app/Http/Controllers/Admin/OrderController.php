@@ -287,26 +287,22 @@ public function storeOrder(Request $request)
 
     /** ORDER DETAILS */
     foreach ($request->products as $item) {
-
         $product = Product::find($item['product_id']);
-
-        /** LINE TOTAL */
         $lineTotal = $item['price'] * $item['qty'];
         $total += $lineTotal;
 
-        /** REQUIRED FINAL FORMAT (RAW STRINGS, NO ARRAY DECODE) */
         $productDetails = [
             "id" => $product->id,
             "name" => $product->name,
             "description" => $product->description,
-            "image" => $product->image,              // RAW JSON STRING
+            "image" => $product->image,
             "price" => $product->price,
-            "variations" => $product->variations,    // RAW JSON STRING
+            "variations" => $product->variations,
             "tax" => $product->tax,
             "status" => $product->status,
-            "attributes" => $product->attributes,    // RAW JSON STRING
-            "category_ids" => $product->category_ids, // RAW JSON STRING
-            "choice_options" => $product->choice_options, // RAW JSON STRING
+            "attributes" => $product->attributes,
+            "category_ids" => $product->category_ids,
+            "choice_options" => $product->choice_options,
             "discount" => $product->discount,
             "discount_type" => $product->discount_type,
             "tax_type" => $product->tax_type,
@@ -316,7 +312,6 @@ public function storeOrder(Request $request)
             "weight" => $product->weight,
         ];
 
-        /** STORE ORDER DETAILS */
         OrderDetail::create([
             'order_id' => $order->id,
             'product_id' => $product->id,
@@ -331,10 +326,7 @@ public function storeOrder(Request $request)
             'invoice_number' => $request->invoice_no,
             'vat_status' => "excluded",
             'variation' => json_encode([]),
-            /** CLEAN JSON — NO PRETTY PRINT, NO SLASHES */
-            'product_details' =>   $productDetails,
-
-
+            'product_details' => $productDetails,
             'order_user' => $request->order_user,
         ]);
     }
@@ -343,44 +335,42 @@ public function storeOrder(Request $request)
     $order->order_amount = $total;
     $order->save();
 
-    /** PAYMENT LOGIC */
+    /** ---------------- PAYMENT LOGIC ---------------- */
     $paid = $request->paid ?? 0;
-    $balance = $total - $paid;
 
-    if ($request->payment_mode == "credit_sale") {
-
-        if ($paid >= $total) {
-            $firstPayment = $total;
-            $secondPayment = 0;
-        } else {
-            $firstPayment = $paid;
-            $secondPayment = $balance;
-        }
-
-        $paymentStatus = "incomplete";
-
-    } else {
-        $firstPayment = $paid;
-        $secondPayment = 0;
-        $paymentStatus = ($paid >= $total) ? "complete" : "incomplete";
+    // Prevent overpayment
+    $totalPaidSoFar = OrderPayment::where('order_id', $order->id)->sum('amount');
+    if (($totalPaidSoFar + $paid) > $total) {
+        return back()->withErrors([
+            'paid' => "Total paid amount cannot exceed order total (₹" . number_format($total, 2) . ")"
+        ])->withInput();
     }
+
+    // Payment status complete if paid > 0
+    $paymentStatus = ($paid > 0) ? 'complete' : 'incomplete';
 
     /** STORE PAYMENT */
     OrderPayment::create([
         'order_id' => $order->id,
         'payment_method' => $request->payment_mode,
-        'amount' => $paid,
-        'first_payment' => $firstPayment,
-        'second_payment' => $secondPayment,
+        'amount' => $paid, // Only this transaction amount
+        'first_payment' => $paid, // optional, can remove if you don't need
+        'second_payment' => 0,    // optional
         'first_payment_date' => now(),
-        'second_payment_date' => ($secondPayment > 0 ? now() : null),
+        'second_payment_date' => null,
         'payment_status' => $paymentStatus,
         'payment_date' => now(),
     ]);
 
+    /** UPDATE ORDER PAYMENT STATUS */
+    $totalPaid = OrderPayment::where('order_id', $order->id)->sum('amount');
+    $order->payment_status = ($totalPaid >= $total) ? 'complete' : 'partial';
+    $order->save();
+
     return redirect()->route('admin.orders.ordermanagement')
         ->with('success', 'Order created successfully.');
 }
+
 
     /**
      * @param $id
