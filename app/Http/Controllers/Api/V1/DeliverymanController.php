@@ -344,7 +344,6 @@ class DeliverymanController extends Controller
 // }
 public function getCurrentOrders(Request $request): \Illuminate\Http\JsonResponse
 {
-    
     $validator = Validator::make($request->all(), [
         'token' => 'required'
     ]);
@@ -353,7 +352,9 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
-    $deliveryman = $this->deliveryman->where('auth_token', $request->token)->first();
+    $deliveryman = $this->deliveryman
+        ->where('auth_token', $request->token)
+        ->first();
 
     if (!$deliveryman) {
         return response()->json([
@@ -363,28 +364,26 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ], 401);
     }
 
-    $deliverymanId = $deliveryman->id;
-
-    
-    $orders = $this->order->with([
+    $orders = $this->order
+        ->with([
             'delivery_address',
             'customer',
             'partial_payment',
             'order_image',
             'store'
         ])
-        ->where('delivery_man_id', $deliverymanId)
+        ->where('delivery_man_id', $deliveryman->id)
         ->get();
 
-   
     $orders->transform(function ($order) {
 
+        // If order amount 0 → reset taxes
         if ($order->order_amount == 0) {
             $order->update(['total_tax_amount' => 0]);
             $order->total_tax_amount = 0;
         }
 
-     
+        // If no delivery address, use store address
         if (empty($order->delivery_address) && $order->store) {
             $order->delivery_address = [
                 'id' => $order->store->id,
@@ -399,19 +398,21 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             ];
         }
 
-        // 🔥 Calculate first_payment + arrear
+      
         $result = DB::table('orders as o')
             ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
             ->where('o.id', $order->id)
             ->selectRaw("
                 o.order_amount,
                 o.total_tax_amount,
-                COALESCE(op.first_payment, 0) AS first_payment,
-                ((o.order_amount + o.total_tax_amount) - COALESCE(op.amount, 0)) AS pending_amount
+                SUM(COALESCE(op.amount, 0)) AS total_paid,
+                (o.order_amount + o.total_tax_amount - SUM(COALESCE(op.amount, 0))) AS pending_amount
             ")
+            ->groupBy('o.id', 'o.order_amount', 'o.total_tax_amount')
             ->first();
 
-        $order->amount = $result->amount ?? 0;
+        // Set final values
+        $order->amount = $result->total_paid ?? 0;
         $order->arrear_amount = $result->pending_amount ?? 0;
 
         return $order;
