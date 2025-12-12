@@ -185,22 +185,25 @@ public function updateOrder(Request $request, $id)
 
     $order = Order::with('payments', 'orderDetails')->findOrFail($id);
 
-    // ------- ORDER TOTAL -------
-    $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
+    // --------------------------------------
+    // FIXED TOTAL (Frontend uses order_amount only)
+    // --------------------------------------
+    $orderTotal = (float) $order->order_amount;
 
-    // ------- GET ALREADY PAID (completed only) -------
+    // ------- ALREADY PAID (completed only) -------
     $alreadyPaid = OrderPayment::where('order_id', $order->id)
         ->where('payment_status', 'complete')
         ->sum('amount');
 
-    // ------- VALIDATE NEW PAYMENT NOT MORE THAN DUE -------
+    // ------- VALIDATE NEW PAYMENT -------
     if ($request->paid_amount > 0) {
 
         $remainingDue = $orderTotal - $alreadyPaid;
 
         if ($request->paid_amount > $remainingDue) {
             return back()->withErrors([
-                'paid_amount' => "You cannot pay more than the remaining due amount. Remaining due: ₹" . number_format($remainingDue, 2)
+                'paid_amount' => "You cannot pay more than the remaining due amount. Remaining due: ₹" 
+                    . number_format($remainingDue, 2)
             ]);
         }
     }
@@ -226,12 +229,26 @@ public function updateOrder(Request $request, $id)
             'amount' => $request->paid_amount,
             'payment_method' => $request->payment_method ?? 'manual',
             'payment_date' => now(),
-            'payment_status' => 'complete', // <<<<<< ADDED AS YOU ASKED
+            'payment_status' => 'complete',
         ]);
     }
 
+    // ------- RECALCULATE PAID STATUS -------
+    $totalPaid = OrderPayment::where('order_id', $order->id)
+        ->where('payment_status', 'complete')
+        ->sum('amount');
+
+    if ($totalPaid >= $orderTotal) {
+        $order->payment_status = 'Paid';
+    } else {
+        $order->payment_status = 'Unpaid';
+    }
+
+    $order->save();
+
     return back()->with('success', 'Order updated successfully.');
 }
+
 
 
 public function createOrder()
