@@ -162,20 +162,20 @@ $first = true;
 @endif
 
 @if($first)
-<td rowspan="{{ $rowspan }}">
-@if($order->order_status=='delivered')
-<span class="status-badge badge-delivered">Delivered</span>
+<td rowspan="{{ $rowspan }}">@if($order->order_status=='delivered')
+    <span class="status-badge badge-delivered">Delivered</span>
 @elseif($order->order_status=='processing')
-<span class="status-badge badge-progress">Processing</span>
+    <span class="status-badge badge-progress">Processing</span>
 @elseif($order->order_status=='failed')
-<span class="status-badge badge-delayed">Delayed</span>
-elseif($order->order_status=='rejected')
-<span class="status-badge badge-delayed">Rejected</span>
-elseif($order->order_status=='ordered')
-<span class="status-badge badge-progress">Ordered</span>
+    <span class="status-badge badge-delayed">Delayed</span>
+@elseif($order->order_status=='rejected')
+    <span class="status-badge badge-delayed">Rejected</span>
+@elseif($order->order_status=='ordered')
+    <span class="status-badge badge-progress">Ordered</span>
 @else
-<span class="status-badge badge-cancel">{{ ucfirst($order->order_status) }}</span>
+    <span class="status-badge badge-cancel">{{ ucfirst($order->order_status) }}</span>
 @endif
+
 </td>
 @endif
 
