@@ -400,7 +400,11 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
       
         $result = DB::table('orders as o')
-            ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+        ->leftJoin('order_payments as op', function ($join) {
+    $join->on('o.id', '=', 'op.order_id')
+         ->where('op.payment_status', 'complete'); 
+})
+
             ->where('o.id', $order->id)
             ->selectRaw("
                 o.order_amount,
