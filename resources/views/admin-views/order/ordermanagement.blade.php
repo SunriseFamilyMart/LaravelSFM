@@ -264,6 +264,7 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
             @csrf
 
             <div class="modal-content">
+
                 <div class="modal-header">
                     <h5 class="modal-title">Edit Order</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -287,19 +288,22 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
                     <!-- Invoice Number -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">Invoice Number</label>
-                        <input type="text" name="invoice_number" id="invoice_number" class="form-control" placeholder="Enter invoice number">
+                        <input type="text" name="invoice_number" id="invoice_number"
+                               class="form-control" placeholder="Enter invoice number">
                     </div>
 
-                    <!-- Expected Delivery Date -->
+                    <!-- Expected Date -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">Expected Delivery Date</label>
-                        <input type="date" name="expected_date" id="expected_date" class="form-control">
+                        <input type="date" name="expected_date" id="expected_date"
+                               class="form-control">
                     </div>
 
-                    <!-- Add Payment -->
+                    <!-- Payment Amount -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">Add Payment (₹)</label>
-                        <input type="number" name="paid_amount" id="paid_amount" class="form-control" placeholder="Enter paid amount">
+                        <input type="number" name="paid_amount" id="paid_amount"
+                               class="form-control" placeholder="Enter paid amount">
                     </div>
 
                     <!-- Payment Method -->
@@ -310,6 +314,16 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
                             <option value="upi">UPI</option>
                             <option value="credit_sale">Credit Sale</option>
                             <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <!-- Payment Status -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Payment Status</label>
+                        <select class="form-control" name="payment_status" id="payment_status">
+                            <option value="pending">Pending</option>
+                            <option value="complete">Complete</option>
+                            <option value="failed">Failed</option>
                         </select>
                     </div>
 
@@ -326,12 +340,18 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
 </div>
 
 <script>
-function loadEditModal(orderId, status) {
+function loadEditModal(orderId, status, invoice, expectedDate, paymentStatus) {
     document.getElementById('order_status').value = status;
+    document.getElementById('invoice_number').value = invoice ?? "";
+    document.getElementById('expected_date').value = expectedDate ?? "";
+    document.getElementById('payment_status').value = paymentStatus ?? "pending";
+
     document.getElementById('paid_amount').value = "";
+
     document.getElementById('editOrderForm').action =
         "{{ route('admin.orders.orders.update', '') }}/" + orderId;
 }
 </script>
+
 
 @endsection

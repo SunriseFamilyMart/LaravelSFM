@@ -126,8 +126,13 @@ public function orderManagement(Request $request)
 
     $limit = $request->get('limit', 10);
 
-    // Fetch orders with details and payments
-    $orders = Order::with(['details.product.supplier', 'payments'])
+    // Fetch orders with related details + only completed payments
+    $orders = Order::with([
+            'details.product.supplier',
+            'payments' => function ($q) {
+                $q->where('payment_status', 'complete'); // ONLY completed payments
+            }
+        ])
         ->when($status, fn ($q) => $q->where('order_status', $status))
         ->whereHas('details', function ($q) use ($productId, $supplierId) {
             if ($productId) {
@@ -140,26 +145,31 @@ public function orderManagement(Request $request)
             }
         })
         ->latest()
-        ->paginate($limit); // Pagination
+        ->paginate($limit);
 
     /* ================= SUMMARY ================= */
     $orderCollection = collect($orders->items());
 
-    $summary = [
-        'total_orders' => $orderCollection->count(),
-        'delivered'    => $orderCollection->where('order_status', 'delivered')->count(),
-        'in_progress'  => $orderCollection->where('order_status', 'processing')->count(),
-        'delayed'      => $orderCollection->where('order_status', 'failed')->count(),
-        'cancelled'    => $orderCollection->where('order_status', 'canceled')->count(),
+    // Calculate only COMPLETE payment amounts
+    $totalPaid = $orderCollection->sum(function ($order) {
+        return $order->payments->where('payment_status', 'complete')->sum('amount');
+    });
 
-        'total_purchase' => $orderCollection->sum('order_amount'),
-        'total_paid'     => $orderCollection->sum(fn ($o) => $o->payments->sum('amount')),
-        'outstanding'    => $orderCollection->sum('order_amount')
-                                - $orderCollection->sum(fn ($o) => $o->payments->sum('amount')),
+    $totalPurchase = $orderCollection->sum('order_amount');
+
+    $summary = [
+        'total_orders'   => $orderCollection->count(),
+        'delivered'      => $orderCollection->where('order_status', 'delivered')->count(),
+        'in_progress'    => $orderCollection->where('order_status', 'processing')->count(),
+        'delayed'        => $orderCollection->where('order_status', 'failed')->count(),
+        'cancelled'      => $orderCollection->where('order_status', 'canceled')->count(),
+
+        'total_purchase' => $totalPurchase,
+        'total_paid'     => $totalPaid,
+        'outstanding'    => $totalPurchase - $totalPaid,
     ];
 
-    // You can also prepare invoice/expected delivery mapping if needed
-    // Example: first detail per order
+    /* Add first detail's invoice & dates */
     foreach ($orders as $order) {
         $order->first_invoice_number = $order->details->first()?->invoice_number ?? null;
         $order->first_expected_date = $order->details->first()?->expected_date ?? null;
@@ -167,87 +177,77 @@ public function orderManagement(Request $request)
     }
 
     return view('admin-views.order.ordermanagement', [
-        'orders'    => $orders,        // paginator object
+        'orders'    => $orders,
         'suppliers' => Supplier::all(),
         'products'  => Product::all(),
         'summary'   => $summary
     ]);
 }
-// public function updateOrder(Request $request, $id)
-// {
-//     $request->validate([
-//         'order_status'    => 'required',
-//         'paid_amount'     => 'nullable|numeric|min:0',
-//         'invoice_number'  => 'nullable|string',
-//         'expected_date'   => 'nullable|date',
-//         'payment_method'  => 'nullable|string',
-//     ]);
+public function updateOrder(Request $request, $id)
+{
+    $request->validate([
+        'order_status'    => 'required',
+        'paid_amount'     => 'nullable|numeric|min:0',
+        'invoice_number'  => 'nullable|string',
+        'expected_date'   => 'nullable|date',
+        'payment_method'  => 'nullable|string',
+        'payment_status'  => 'nullable|string|in:pending,complete,failed',
+    ]);
 
-//     $order = Order::with('payments', 'orderDetails')->findOrFail($id);
+    $order = Order::with('payments', 'orderDetails')->findOrFail($id);
 
-//     // --------------------------------------
-//     // FIXED TOTAL (Frontend uses order_amount only)
-//     // --------------------------------------
-//     $orderTotal = (float) $order->order_amount;
+    $orderTotal = (float) $order->order_amount;
 
-//     // ------- ALREADY PAID (completed only) -------
-//     $alreadyPaid = OrderPayment::where('order_id', $order->id)
-//         ->where('payment_status', 'complete')
-//         ->sum('amount');
+    $alreadyPaid = OrderPayment::where('order_id', $order->id)
+        ->where('payment_status', 'complete')
+        ->sum('amount');
 
-//     // ------- VALIDATE NEW PAYMENT -------
-//     if ($request->paid_amount > 0) {
+    if ($request->paid_amount > 0) {
+        $remainingDue = $orderTotal - $alreadyPaid;
 
-//         $remainingDue = $orderTotal - $alreadyPaid;
+        if ($request->paid_amount > $remainingDue) {
+            return back()->withErrors([
+                'paid_amount' => "You cannot pay more than remaining due: ₹"
+                    . number_format($remainingDue, 2)
+            ]);
+        }
+    }
 
-//         if ($request->paid_amount > $remainingDue) {
-//             return back()->withErrors([
-//                 'paid_amount' => "You cannot pay more than the remaining due amount. Remaining due: ₹" 
-//                     . number_format($remainingDue, 2)
-//             ]);
-//         }
-//     }
+    // Update Order Status
+    $order->order_status = $request->order_status;
+    $order->save();
 
-//     // ------- UPDATE ORDER STATUS -------
-//     $order->order_status = $request->order_status;
-//     $order->save();
+    // Update order_details
+    foreach ($order->orderDetails as $detail) {
+        if ($request->filled('invoice_number')) {
+            $detail->invoice_number = $request->invoice_number;
+        }
+        if ($request->filled('expected_date')) {
+            $detail->expected_date = $request->expected_date;
+        }
+        $detail->save();
+    }
 
-//     // ------- UPDATE ORDER DETAILS -------
-//     foreach ($order->orderDetails as $detail) {
-//         if ($request->filled('invoice_number')) {
-//             $detail->invoice_number = $request->invoice_number;
-//         }
-//         if ($request->filled('expected_date')) {
-//             $detail->expected_date = $request->expected_date;
-//         }
-//         $detail->save();
-//     }
+    // Add a payment if entered
+    if ($request->paid_amount > 0) {
+        $order->payments()->create([
+            'amount'          => $request->paid_amount,
+            'payment_method'  => $request->payment_method ?? 'manual',
+            'payment_date'    => now(),
+            'payment_status'  => $request->payment_status ?? 'pending',
+        ]);
+    }
 
-//     // ------- ADD PAYMENT IF GIVEN -------
-//     if ($request->paid_amount > 0) {
-//         $order->payments()->create([
-//             'amount' => $request->paid_amount,
-//             'payment_method' => $request->payment_method ?? 'manual',
-//             'payment_date' => now(),
-//             'payment_status' => 'complete',
-//         ]);
-//     }
+    // Recalculate total paid
+    $totalPaid = OrderPayment::where('order_id', $order->id)
+        ->where('payment_status', 'complete')
+        ->sum('amount');
 
-//     // ------- RECALCULATE PAID STATUS -------
-//     $totalPaid = OrderPayment::where('order_id', $order->id)
-//         ->where('payment_status', 'complete')
-//         ->sum('amount');
+    $order->payment_status = $totalPaid >= $orderTotal ? 'Paid' : 'Unpaid';
+    $order->save();
 
-//     if ($totalPaid >= $orderTotal) {
-//         $order->payment_status = 'Paid';
-//     } else {
-//         $order->payment_status = 'Unpaid';
-//     }
-
-//     $order->save();
-
-//     return back()->with('success', 'Order updated successfully.');
-// }
+    return back()->with('success', 'Order updated successfully.');
+}
 
 
 
