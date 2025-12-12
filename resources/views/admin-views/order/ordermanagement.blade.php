@@ -66,6 +66,8 @@
 <option value="processing" {{ request('status')=='processing'?'selected':'' }}>Processing</option>
 <option value="failed" {{ request('status')=='failed'?'selected':'' }}>Delayed</option>
 <option value="canceled" {{ request('status')=='canceled'?'selected':'' }}>Cancelled</option>
+<option value="ordered" {{ request('status')=='ordered'?'selected':'' }}>Ordered</option>
+<option value="rejected" {{ request('status')=='rejected'?'selected':'' }}>Rejected</option>
 </select>
 </div>
 
