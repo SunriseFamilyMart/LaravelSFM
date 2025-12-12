@@ -2937,4 +2937,6 @@
   'rejected' => 'Rejected',
   'credit sale' => 'Credit sale',
   'Unpaid' => 'Unpaid',
+  'Deliveryman' => 'Deliveryman',
+  'No Delivery Date' => 'No Delivery Date',
 );

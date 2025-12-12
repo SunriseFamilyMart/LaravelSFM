@@ -260,6 +260,7 @@
                                 </th>
                                 <th class="table-column-pl-0">{{ translate('order ID') }}</th>
                                 <th>{{ translate('Delivery') }} {{ translate('date') }}</th>
+                                <th>{{ translate('Deliveryman') }}
                                 <th>{{ translate('Time Slot') }}</th>
                                 <th>{{ translate('customer') }}</th>
                                 <th>{{ translate('branch') }}</th>
@@ -292,7 +293,24 @@
                                         <a
                                             href="{{ route('admin.orders.details', ['id' => $order['id']]) }}">{{ $order['id'] }}</a>
                                     </td>
-                                    <td>{{ date('d M Y', strtotime($order['delivery_date'])) }}</td>
+                                 
+<td>
+    @if($order['delivery_date'])
+        {{ date('d M Y', strtotime($order['delivery_date'])) }}
+    @else
+        <span class="text-muted">{{ translate('No Delivery Date') }}</span>
+    @endif
+</td>
+
+                                      <td>
+                                        @if ($order->delivery_man)
+                                            {{ $order->delivery_man->f_name }} {{ $order->delivery_man->l_name }}
+                                            <br>
+                                            <small>{{ $order->delivery_man->phone }}</small>
+                                        @else
+                                            <span class="badge badge-danger">Not Assigned</span>
+                                        @endif
+                                    </td>
                                     <td>
                                         <span>{{ $order->time_slot ? date(config('time_format'), strtotime($order->time_slot['start_time'])) . ' - ' . date(config('time_format'), strtotime($order->time_slot['end_time'])) : translate('No Time Slot') }}</span>
                                     </td>

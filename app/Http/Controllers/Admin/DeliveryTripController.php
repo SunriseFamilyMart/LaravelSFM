@@ -42,7 +42,7 @@ class DeliveryTripController extends Controller
 
         // Orders assigned to sales person but not yet to delivery man
         $orders = Order::whereNull('delivery_man_id')
-            ->where('order_status', 'pending')
+         ->whereIn('order_status', ['pending', 'processing'])
             ->get();
 
         // Fetch assigned trips
