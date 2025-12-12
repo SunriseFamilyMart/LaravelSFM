@@ -137,11 +137,18 @@ $first = true;
 @if($first)
 <td rowspan="{{ $rowspan }}">
 <button class="btn btn-sm btn-primary"
-        data-bs-toggle="modal"
-        data-bs-target="#editOrderModal"
-        onclick="loadEditModal({{ $order->id }}, '{{ $order->order_status }}')">
+    onclick="loadEditModal(
+        '{{ $order->id }}',
+        '{{ $order->order_status }}',
+        '{{ $order->first_invoice_number }}',
+        '{{ $order->first_expected_date }}',
+        '{{ $order->payment_status }}'
+    )"
+    data-bs-toggle="modal"
+    data-bs-target="#editOrderModal">
     Edit
 </button>
+
 </td>
 @endif
 @if($first)
