@@ -173,7 +173,6 @@ public function orderManagement(Request $request)
         'summary'   => $summary
     ]);
 }
-
 public function updateOrder(Request $request, $id)
 {
     $request->validate([
@@ -181,16 +180,36 @@ public function updateOrder(Request $request, $id)
         'paid_amount'     => 'nullable|numeric|min:0',
         'invoice_number'  => 'nullable|string',
         'expected_date'   => 'nullable|date',
-        'payment_method'  => 'nullable|string', // optional for future use
+        'payment_method'  => 'nullable|string',
     ]);
 
     $order = Order::with('payments', 'orderDetails')->findOrFail($id);
 
-    // Update order status
+    // ------- ORDER TOTAL -------
+    $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
+
+    // ------- GET ALREADY PAID (completed only) -------
+    $alreadyPaid = OrderPayment::where('order_id', $order->id)
+        ->where('payment_status', 'complete')
+        ->sum('amount');
+
+    // ------- VALIDATE NEW PAYMENT NOT MORE THAN DUE -------
+    if ($request->paid_amount > 0) {
+
+        $remainingDue = $orderTotal - $alreadyPaid;
+
+        if ($request->paid_amount > $remainingDue) {
+            return back()->withErrors([
+                'paid_amount' => "You cannot pay more than the remaining due amount. Remaining due: ₹" . number_format($remainingDue, 2)
+            ]);
+        }
+    }
+
+    // ------- UPDATE ORDER STATUS -------
     $order->order_status = $request->order_status;
     $order->save();
 
-    // Update order details with invoice_number & expected_date
+    // ------- UPDATE ORDER DETAILS -------
     foreach ($order->orderDetails as $detail) {
         if ($request->filled('invoice_number')) {
             $detail->invoice_number = $request->invoice_number;
@@ -201,12 +220,13 @@ public function updateOrder(Request $request, $id)
         $detail->save();
     }
 
-    // Add new payment if provided
+    // ------- ADD PAYMENT IF GIVEN -------
     if ($request->paid_amount > 0) {
         $order->payments()->create([
             'amount' => $request->paid_amount,
             'payment_method' => $request->payment_method ?? 'manual',
             'payment_date' => now(),
+            'payment_status' => 'complete', // <<<<<< ADDED AS YOU ASKED
         ]);
     }
 
