@@ -1079,7 +1079,155 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'payment_status' => $order->payment_status
         ], 200);
     }
-   public function storeFlexiblePayment(Request $request)
+    // public function storeFlexiblePayment(Request $request)
+    // {
+    //     // -------------------- VALIDATION --------------------
+    //     $validator = Validator::make($request->all(), [
+    //         'token' => 'required',
+    //         'order_id' => 'required|exists:orders,id',
+    //         'payments' => 'required|array|min:1',
+
+    //         'payments.*.payment_method' => 'required|in:cash,upi,credit_sale',
+
+    //         // Amount required unless credit_sale because credit calculated automatically
+    //         'payments.*.amount' => 'required_unless:payments.*.payment_method,credit_sale|numeric|min:0',
+
+    //         'payments.*.payment_date' => 'nullable|date',
+    //     ]);
+
+    //     // Custom validation for UPI transaction_id based on amount
+    //     $validator->after(function ($validator) use ($request) {
+    //         foreach ($request->payments as $index => $payment) {
+    //             if (
+    //                 isset($payment['payment_method']) &&
+    //                 $payment['payment_method'] === 'upi' &&
+    //                 isset($payment['amount']) &&
+    //                 $payment['amount'] > 0 &&
+    //                 empty($payment['transaction_id'])
+    //             ) {
+    //                 $validator->errors()->add("payments.$index.transaction_id", "Transaction ID is required when UPI amount is greater than 0.");
+    //             }
+    //         }
+    //     });
+
+    //     if ($validator->fails()) {
+    //         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+    //     }
+
+
+    //     // -------------------- AUTH CHECK --------------------
+    //     $deliveryman = DeliveryMan::where('auth_token', str_replace('Bearer ', '', $request->token))->first();
+    //     if (!$deliveryman) {
+    //         return response()->json(['errors' => [['code' => 401, 'message' => 'Invalid token!']]], 401);
+    //     }
+
+
+    //     // -------------------- FETCH ORDER --------------------
+    //     $order = Order::find($request->order_id);
+    //     $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
+
+    //     // Already paid before
+    //     $alreadyPaid = OrderPayment::where('order_id', $order->id)
+    //         ->where('payment_status', 'complete')
+    //         ->sum('amount');
+
+
+    //     // -------------------- PROCESS NEW PAYMENT --------------------
+    //     $incomingPaid = 0;
+    //     $validPayments = [];
+
+    //     foreach ($request->payments as $payment) {
+
+    //         // Add only real cash/upi payments (not credit)
+    //         if ($payment['payment_method'] !== 'credit_sale') {
+    //             $incomingPaid += $payment['amount'];
+    //         }
+
+    //         // Skip empty payment modes
+    //         if (($payment['amount'] ?? 0) == 0 && $payment['payment_method'] !== 'credit_sale') {
+    //             continue;
+    //         }
+
+    //         $validPayments[] = $payment;
+    //     }
+
+    //     if (empty($validPayments)) {
+    //         return response()->json([
+    //             'errors' => [['code' => 'payment', 'message' => 'At least one non-zero payment is required.']]
+    //         ], 422);
+    //     }
+
+
+    //     // -------------------- PREVENT OVERPAYMENT --------------------
+    //     if (($alreadyPaid + $incomingPaid) > $orderTotal) {
+    //         return response()->json([
+    //             'errors' => [['code' => 422, 'message' => 'Payment exceeds order total.']]
+    //         ], 422);
+    //     }
+
+
+    //     // -------------------- SAVE PAYMENTS --------------------
+    //     $paymentRecords = [];
+
+    //     foreach ($validPayments as $pay) {
+
+    //         // Skip credit sale — will auto create later
+    //         if ($pay['payment_method'] === 'credit_sale')
+    //             continue;
+
+    //         $paymentRecords[] = OrderPayment::create([
+    //             'order_id' => $order->id,
+    //             'payment_method' => $pay['payment_method'],
+    //             'amount' => $pay['amount'],
+    //             'transaction_id' => $pay['payment_method'] == 'upi' ? $pay['transaction_id'] : null,
+    //             'payment_date' => $pay['payment_date'] ?? now()->toDateString(),
+    //             'payment_status' => 'complete',
+    //         ]);
+    //     }
+
+    //     $totalPaid = $incomingPaid + $alreadyPaid;
+
+
+    //     // -------------------- AUTO CREATE CREDIT SALE ENTRY --------------------
+    //     if ($totalPaid < $orderTotal) {
+    //         $remaining = $orderTotal - $totalPaid;
+
+    //         $paymentRecords[] = OrderPayment::create([
+    //             'order_id' => $order->id,
+    //             'payment_method' => 'credit_sale',
+    //             'amount' => $remaining,
+    //             'payment_date' => now()->toDateString(),
+    //             'payment_status' => 'incomplete',
+    //         ]);
+    //     }
+
+
+    //     // -------------------- UPDATE ORDER PAYMENT STATUS --------------------
+    //     if ($totalPaid == 0) {
+    //         $order->payment_status = 'unpaid';
+    //     } elseif ($totalPaid < $orderTotal) {
+    //         $order->payment_status = 'partial';
+    //     } else {
+    //         $order->payment_status = 'paid';
+    //     }
+
+    //     $order->save();
+
+
+    //     // -------------------- RESPONSE --------------------
+    //     return response()->json([
+    //         'message' => 'Payment recorded successfully',
+    //         'order_id' => $order->id,
+    //         'order_status' => $order->order_status,
+    //         'order_payment_status' => $order->payment_status,
+    //         'order_total' => $orderTotal,
+    //         'total_paid' => $totalPaid,
+    //         'due_amount' => max($orderTotal - $totalPaid, 0),
+    //         'payments' => $paymentRecords
+    //     ], 200);
+    // }
+   
+public function storeFlexiblePayment(Request $request)
 {
     // -------------------- VALIDATION --------------------
     $validator = Validator::make($request->all(), [
@@ -1088,24 +1236,22 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         'payments' => 'required|array|min:1',
 
         'payments.*.payment_method' => 'required|in:cash,upi,credit_sale',
-
-        // Amount required unless credit_sale because credit calculated automatically
         'payments.*.amount' => 'required_unless:payments.*.payment_method,credit_sale|numeric|min:0',
-
         'payments.*.payment_date' => 'nullable|date',
     ]);
 
-    // Custom validation for UPI transaction_id based on amount
+    // UPI validation
     $validator->after(function ($validator) use ($request) {
         foreach ($request->payments as $index => $payment) {
             if (
-                isset($payment['payment_method']) &&
-                $payment['payment_method'] === 'upi' &&
-                isset($payment['amount']) &&
-                $payment['amount'] > 0 &&
+                ($payment['payment_method'] ?? null) === 'upi' &&
+                ($payment['amount'] ?? 0) > 0 &&
                 empty($payment['transaction_id'])
             ) {
-                $validator->errors()->add("payments.$index.transaction_id", "Transaction ID is required when UPI amount is greater than 0.");
+                $validator->errors()->add(
+                    "payments.$index.transaction_id",
+                    "Transaction ID is required when UPI amount is greater than 0."
+                );
             }
         }
     });
@@ -1114,36 +1260,35 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
-
-    // -------------------- AUTH CHECK --------------------
+    // -------------------- TOKEN VALIDATION --------------------
     $deliveryman = DeliveryMan::where('auth_token', str_replace('Bearer ', '', $request->token))->first();
+
     if (!$deliveryman) {
-        return response()->json(['errors' => [['code' => 401, 'message' => 'Invalid token!']]], 401);
+        return response()->json([
+            'errors' => [['code' => 401, 'message' => 'Invalid token!']]
+        ], 401);
     }
 
-
-    // -------------------- FETCH ORDER --------------------
     $order = Order::find($request->order_id);
     $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
 
-    // Already paid before
+    // SUM OF PREVIOUS COMPLETED PAYMENTS
     $alreadyPaid = OrderPayment::where('order_id', $order->id)
         ->where('payment_status', 'complete')
         ->sum('amount');
 
-
-    // -------------------- PROCESS NEW PAYMENT --------------------
+    // -------------------- PROCESS NEW PAYMENTS --------------------
     $incomingPaid = 0;
     $validPayments = [];
 
     foreach ($request->payments as $payment) {
 
-        // Add only real cash/upi payments (not credit)
+        // Add only real payments (cash/upi)
         if ($payment['payment_method'] !== 'credit_sale') {
             $incomingPaid += $payment['amount'];
         }
 
-        // Skip empty payment modes
+        // Skip zero amount for cash/upi
         if (($payment['amount'] ?? 0) == 0 && $payment['payment_method'] !== 'credit_sale') {
             continue;
         }
@@ -1157,44 +1302,35 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ], 422);
     }
 
-
-    // -------------------- PREVENT OVERPAYMENT (CORRECT LOGIC) --------------------
-    $dueAmount = $orderTotal - $alreadyPaid;
-
-    if ($incomingPaid > $dueAmount) {
+    // -------------------- PREVENT OVERPAYMENT --------------------
+    if (($alreadyPaid + $incomingPaid) > $orderTotal) {
         return response()->json([
-            'errors' => [
-                [
-                    'code' => 422,
-                    'message' => "Payment exceeds due amount. You can pay only up to $dueAmount"
-                ]
-            ]
+            'errors' => [['code' => 422, 'message' => 'Payment exceeds order total.']]
         ], 422);
     }
-
 
     // -------------------- SAVE PAYMENTS --------------------
     $paymentRecords = [];
 
     foreach ($validPayments as $pay) {
 
-        if ($pay['payment_method'] === 'credit_sale')
+        if ($pay['payment_method'] === 'credit_sale') {
             continue;
+        }
 
         $paymentRecords[] = OrderPayment::create([
             'order_id' => $order->id,
             'payment_method' => $pay['payment_method'],
             'amount' => $pay['amount'],
             'transaction_id' => $pay['payment_method'] == 'upi' ? $pay['transaction_id'] : null,
-            'payment_date' => $pay['payment_date'] ?? now()->toDateString(),
+            'payment_date' => $pay['payment_date'] ?? date('Y-m-d'),
             'payment_status' => 'complete',
         ]);
     }
 
     $totalPaid = $incomingPaid + $alreadyPaid;
 
-
-    // -------------------- AUTO CREATE CREDIT SALE ENTRY --------------------
+    // -------------------- AUTO CREDIT ENTRY --------------------
     if ($totalPaid < $orderTotal) {
         $remaining = $orderTotal - $totalPaid;
 
@@ -1202,11 +1338,10 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'order_id' => $order->id,
             'payment_method' => 'credit_sale',
             'amount' => $remaining,
-            'payment_date' => now()->toDateString(),
+            'payment_date' => date('Y-m-d'),
             'payment_status' => 'incomplete',
         ]);
     }
-
 
     // -------------------- UPDATE ORDER PAYMENT STATUS --------------------
     if ($totalPaid == 0) {
@@ -1218,7 +1353,6 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
     }
 
     $order->save();
-
 
     // -------------------- RESPONSE --------------------
     return response()->json([
@@ -1232,7 +1366,6 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         'payments' => $paymentRecords
     ], 200);
 }
-
 
     public function getOrderPayments(Request $request)
     {
