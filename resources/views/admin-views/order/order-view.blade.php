@@ -45,11 +45,13 @@
     <strong>Total Order Value: </strong>
     ₹{{ number_format($order->order_amount + $order->total_tax_amount, 2) }}
 </p>
-
 <p class="mb-1">
     <strong>Total Paid: </strong>
     @php
-        $totalPaid = $order->payments->sum('amount'); // sum all payments
+        
+        $totalPaid = $order->payments
+            ->where('payment_status', 'complete')
+            ->sum('amount');
     @endphp
     ₹{{ number_format($totalPaid, 2) }}
 </p>
