@@ -173,81 +173,81 @@ public function orderManagement(Request $request)
         'summary'   => $summary
     ]);
 }
-public function updateOrder(Request $request, $id)
-{
-    $request->validate([
-        'order_status'    => 'required',
-        'paid_amount'     => 'nullable|numeric|min:0',
-        'invoice_number'  => 'nullable|string',
-        'expected_date'   => 'nullable|date',
-        'payment_method'  => 'nullable|string',
-    ]);
+// public function updateOrder(Request $request, $id)
+// {
+//     $request->validate([
+//         'order_status'    => 'required',
+//         'paid_amount'     => 'nullable|numeric|min:0',
+//         'invoice_number'  => 'nullable|string',
+//         'expected_date'   => 'nullable|date',
+//         'payment_method'  => 'nullable|string',
+//     ]);
 
-    $order = Order::with('payments', 'orderDetails')->findOrFail($id);
+//     $order = Order::with('payments', 'orderDetails')->findOrFail($id);
 
-    // --------------------------------------
-    // FIXED TOTAL (Frontend uses order_amount only)
-    // --------------------------------------
-    $orderTotal = (float) $order->order_amount;
+//     // --------------------------------------
+//     // FIXED TOTAL (Frontend uses order_amount only)
+//     // --------------------------------------
+//     $orderTotal = (float) $order->order_amount;
 
-    // ------- ALREADY PAID (completed only) -------
-    $alreadyPaid = OrderPayment::where('order_id', $order->id)
-        ->where('payment_status', 'complete')
-        ->sum('amount');
+//     // ------- ALREADY PAID (completed only) -------
+//     $alreadyPaid = OrderPayment::where('order_id', $order->id)
+//         ->where('payment_status', 'complete')
+//         ->sum('amount');
 
-    // ------- VALIDATE NEW PAYMENT -------
-    if ($request->paid_amount > 0) {
+//     // ------- VALIDATE NEW PAYMENT -------
+//     if ($request->paid_amount > 0) {
 
-        $remainingDue = $orderTotal - $alreadyPaid;
+//         $remainingDue = $orderTotal - $alreadyPaid;
 
-        if ($request->paid_amount > $remainingDue) {
-            return back()->withErrors([
-                'paid_amount' => "You cannot pay more than the remaining due amount. Remaining due: ₹" 
-                    . number_format($remainingDue, 2)
-            ]);
-        }
-    }
+//         if ($request->paid_amount > $remainingDue) {
+//             return back()->withErrors([
+//                 'paid_amount' => "You cannot pay more than the remaining due amount. Remaining due: ₹" 
+//                     . number_format($remainingDue, 2)
+//             ]);
+//         }
+//     }
 
-    // ------- UPDATE ORDER STATUS -------
-    $order->order_status = $request->order_status;
-    $order->save();
+//     // ------- UPDATE ORDER STATUS -------
+//     $order->order_status = $request->order_status;
+//     $order->save();
 
-    // ------- UPDATE ORDER DETAILS -------
-    foreach ($order->orderDetails as $detail) {
-        if ($request->filled('invoice_number')) {
-            $detail->invoice_number = $request->invoice_number;
-        }
-        if ($request->filled('expected_date')) {
-            $detail->expected_date = $request->expected_date;
-        }
-        $detail->save();
-    }
+//     // ------- UPDATE ORDER DETAILS -------
+//     foreach ($order->orderDetails as $detail) {
+//         if ($request->filled('invoice_number')) {
+//             $detail->invoice_number = $request->invoice_number;
+//         }
+//         if ($request->filled('expected_date')) {
+//             $detail->expected_date = $request->expected_date;
+//         }
+//         $detail->save();
+//     }
 
-    // ------- ADD PAYMENT IF GIVEN -------
-    if ($request->paid_amount > 0) {
-        $order->payments()->create([
-            'amount' => $request->paid_amount,
-            'payment_method' => $request->payment_method ?? 'manual',
-            'payment_date' => now(),
-            'payment_status' => 'complete',
-        ]);
-    }
+//     // ------- ADD PAYMENT IF GIVEN -------
+//     if ($request->paid_amount > 0) {
+//         $order->payments()->create([
+//             'amount' => $request->paid_amount,
+//             'payment_method' => $request->payment_method ?? 'manual',
+//             'payment_date' => now(),
+//             'payment_status' => 'complete',
+//         ]);
+//     }
 
-    // ------- RECALCULATE PAID STATUS -------
-    $totalPaid = OrderPayment::where('order_id', $order->id)
-        ->where('payment_status', 'complete')
-        ->sum('amount');
+//     // ------- RECALCULATE PAID STATUS -------
+//     $totalPaid = OrderPayment::where('order_id', $order->id)
+//         ->where('payment_status', 'complete')
+//         ->sum('amount');
 
-    if ($totalPaid >= $orderTotal) {
-        $order->payment_status = 'Paid';
-    } else {
-        $order->payment_status = 'Unpaid';
-    }
+//     if ($totalPaid >= $orderTotal) {
+//         $order->payment_status = 'Paid';
+//     } else {
+//         $order->payment_status = 'Unpaid';
+//     }
 
-    $order->save();
+//     $order->save();
 
-    return back()->with('success', 'Order updated successfully.');
-}
+//     return back()->with('success', 'Order updated successfully.');
+// }
 
 
 
