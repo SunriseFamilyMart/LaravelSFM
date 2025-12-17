@@ -555,7 +555,22 @@ public function myStores(Request $request)
     }
 
     // ✅ FETCH ALL STORES (no salesman filter)
-    $stores = Store::latest()->get();
+   // $stores = Store::latest()->get();
+    $stores = Store::select(
+        'id',
+        'store_name',
+        'customer_name',
+        'address',
+        'full_address', 
+        'landmark',
+        'phone_number',
+        'latitude',
+        'longitude',
+        'sales_person_id',
+        'route_name',
+        'store_photo',
+        'created_at'
+    )->latest()->get();
 
     // ➕ Add arrear_amount for each store (unchanged)
     foreach ($stores as $store) {
