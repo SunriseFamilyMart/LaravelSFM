@@ -19,7 +19,15 @@ class Store extends Model
         'sales_person_id',
         'store_photo',
         'gst_number',
-        'route_name' // 👈 add this
+        'route_name',
+        'street_address',
+        'area',
+        'city',
+        'taluk',
+        'district',
+        'state',
+        'pincode',
+        'full_address'
     ];
 
     public function salesPerson()

@@ -435,6 +435,13 @@ class AuthController extends Controller
         $request->validate([
             'store_name' => 'required|string|max:255',
             'customer_name' => 'required|string|max:255',
+            'street_address' => 'nullable|string|max:255',
+            'area' => 'nullable|string|max:150',
+            'city' => 'nullable|string|max:100',
+            'taluk' => 'nullable|string|max:100',
+            'district' => 'nullable|string|max:100',
+            'state' => 'nullable|string|max:100',
+            'pincode' => 'nullable|string|max:10',
             'address' => 'required|string|max:500',
             'phone_number' => 'required|string|max:15',
             'alternate_number' => 'nullable|string|max:15',
@@ -477,13 +484,39 @@ class AuthController extends Controller
         }
 
         // 📌 Prepare data
-        $data = $request->all();
+       // $data = $request->all();
+            $data = $request->only([
+            'store_name',
+            'customer_name',
+            'street_address',
+            'area',
+            'city',
+            'taluk',
+            'district',
+            'state',
+            'pincode',
+            'address',
+            'phone_number',
+            'alternate_number',
+            'gst_number',
+            'landmark',
+        ]);
+
         $data['phone_number'] = $phone;
         $data['alternate_number'] = $alternate;
         $data['latitude'] = $latitude;
         $data['longitude'] = $longitude;
         $data['sales_person_id'] = $salesPerson->id;
-        $data['route_name'] = $request->route_name; 
+        $data['route_name'] = $request->route_name;
+        $data['full_address'] = implode(', ', array_filter([
+            $data['street_address'] ?? null,
+            $data['area'] ?? null,
+            $data['city'] ?? null,
+            $data['taluk'] ?? null,
+            $data['district'] ?? null,
+            $data['state'] ?? 'Karnataka',
+            $data['pincode'] ?? null,
+        ]));
 
         if ($request->hasFile('store_photo')) {
             $data['store_photo'] = $request->file('store_photo')
