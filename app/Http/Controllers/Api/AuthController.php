@@ -448,6 +448,8 @@ class AuthController extends Controller
             'gst_number' => 'nullable|string|max:20', // ✅ GST field
             'landmark' => 'nullable|string|max:255',
             'route_name' => 'required|string|max:255',
+            'latitude'  => 'required|numeric',
+            'longitude' => 'required|numeric',
             'store_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
@@ -461,7 +463,7 @@ class AuthController extends Controller
         if ($alternate && !str_starts_with($alternate, '+91')) {
             $alternate = '+91' . ltrim($alternate, '0');
         }
-
+/*
         // 🌍 Latitude & Longitude
         $latitude = null;
         $longitude = null;
@@ -482,9 +484,10 @@ class AuthController extends Controller
                 $longitude = $geoData['results'][0]['geometry']['location']['lng'];
             }
         }
-
+*/
         // 📌 Prepare data
        // $data = $request->all();
+
             $data = $request->only([
             'store_name',
             'customer_name',
@@ -504,8 +507,8 @@ class AuthController extends Controller
 
         $data['phone_number'] = $phone;
         $data['alternate_number'] = $alternate;
-        $data['latitude'] = $latitude;
-        $data['longitude'] = $longitude;
+        $data['latitude'] = $request->latitude;
+        $data['longitude'] = $request->longitude;
         $data['sales_person_id'] = $salesPerson->id;
         $data['route_name'] = $request->route_name;
         $data['full_address'] = implode(', ', array_filter([
@@ -525,6 +528,11 @@ class AuthController extends Controller
 
         // 🏪 Save Store
         $store = Store::create($data);
+        \Log::info('STORE LAT LNG', [
+    'lat' => $request->latitude,
+    'lng' => $request->longitude,
+]);
+
 
         return response()->json([
             'success' => true,
