@@ -440,7 +440,8 @@ class AuthController extends Controller
             'alternate_number' => 'nullable|string|max:15',
             'gst_number' => 'nullable|string|max:20', // ✅ GST field
             'landmark' => 'nullable|string|max:255',
-            'store_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'route_name' => 'required|string|max:255',
+            'store_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
         // 📞 Normalize phone numbers
@@ -482,6 +483,7 @@ class AuthController extends Controller
         $data['latitude'] = $latitude;
         $data['longitude'] = $longitude;
         $data['sales_person_id'] = $salesPerson->id;
+        $data['route_name'] = $request->route_name; 
 
         if ($request->hasFile('store_photo')) {
             $data['store_photo'] = $request->file('store_photo')
@@ -503,7 +505,6 @@ public function myStores(Request $request)
 {
     // 🔐 Get token from header
     $token = $request->header('Authorization');
-
     if (!$token) {
         return response()->json([
             'success' => false,
@@ -520,12 +521,10 @@ public function myStores(Request $request)
         ], 401);
     }
 
-    // 📌 Fetch stores created by this salesperson
-    $stores = Store::where('sales_person_id', $salesPerson->id)
-        ->latest()
-        ->get();
+    // ✅ FETCH ALL STORES (no salesman filter)
+    $stores = Store::latest()->get();
 
-    // ➕ Add arrear_amount for each store
+    // ➕ Add arrear_amount for each store (unchanged)
     foreach ($stores as $store) {
 
         $arrear = DB::table('orders as o')
@@ -543,7 +542,6 @@ public function myStores(Request $request)
         'data' => $stores
     ]);
 }
-
 
    public function getAllOrdersArrear(Request $request): JsonResponse
 {

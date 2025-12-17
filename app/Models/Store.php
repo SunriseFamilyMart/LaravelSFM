@@ -18,11 +18,9 @@ class Store extends Model
         'longitude',
         'sales_person_id',
         'store_photo',
-        'gst_number', // 👈 add this
-
-
+        'gst_number',
+        'route_name' // 👈 add this
     ];
-
 
     public function salesPerson()
     {
