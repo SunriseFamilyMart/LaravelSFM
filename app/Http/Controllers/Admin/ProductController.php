@@ -300,14 +300,7 @@ class ProductController extends Controller
         $product->image = $imageData;
         $product->capacity = $request->capacity;
         $product->maximum_order_quantity = $request->maximum_order_quantity;
-   if ($request->tax_type == 'percent') {
-    $product->tax = $request->tax; 
-} else {
-    $product->tax = $request->tax_amount; 
-}
-
-$product->tax_type = $request->tax_type;
-
+        $product->tax = $request->tax_type == 'amount' ? $request->tax : $request->tax;
         $product->tax_type = $request->tax_type;
         $product->discount = $request->discount_type == 'amount' ? $request->discount : $request->discount;
         $product->discount_type = $request->discount_type;
@@ -416,34 +409,15 @@ $product->tax_type = $request->tax_type;
      */
     public function update(Request $request, $id): \Illuminate\Http\JsonResponse
     {
-       $validator = Validator::make($request->all(), [
-    'name' => 'required',
-    'category_id' => 'required',
-    'total_stock' => 'required|numeric|min:1',
-    'price' => 'required|numeric|min:0',
-    'tax_type' => 'required|in:percent,amount',
-  'tax_percent' => 'nullable|numeric|in:0,5,12,18,28',
-'tax_amount'  => 'nullable|numeric|min:0',
-
-]);
-
-       $validator->after(function ($validator) use ($request) {
-
-    // GST % validation
-    if ($request->tax_type === 'percent') {
-        if (!in_array((int)$request->tax, [0, 5, 12, 18, 28])) {
-            $validator->errors()->add('tax', 'Invalid GST percentage selected!');
-        }
-    }
-
-    // Tax amount validation
-    if ($request->tax_type === 'amount') {
-        if ($request->tax < 0) {
-            $validator->errors()->add('tax', 'Tax amount cannot be negative!');
-        }
-    }
-
-});
+        $validator = Validator::make($request->all(), [
+            'name' => 'required',
+            'category_id' => 'required',
+            'total_stock' => 'required|numeric|min:1',
+            'price' => 'required|numeric|min:0',
+        ], [
+            'name.required' => 'Product name is required!',
+            'category_id.required' => 'category  is required!',
+        ]);
 
         if ($request['discount_type'] == 'percent') {
             $discount = ($request['price'] / 100) * $request['discount'];
@@ -576,15 +550,8 @@ $product->tax_type = $request->tax_type;
         $product->unit = $request->unit;
         $product->maximum_order_quantity = $request->maximum_order_quantity;
         $product->image = json_encode($images);
-      $product->tax = (float) $request->tax;
-if ($request->tax_type === 'percent') {
-    $product->tax = (float) $request->tax_percent;
-} else {
-    $product->tax = (float) $request->tax_amount;
-}
-
-$product->tax_type = $request->tax_type;
-
+        $product->tax = $request->tax_type == 'amount' ? $request->tax : $request->tax;
+        $product->tax_type = $request->tax_type;
         $product->discount = $request->discount_type == 'amount' ? $request->discount : $request->discount;
         $product->discount_type = $request->discount_type;
         $product->total_stock = $request->total_stock;

@@ -12,19 +12,21 @@
 
 <div class="card-body">
 <form method="POST" action="{{ route('admin.orders.orders.store') }}">
+
 @csrf
 
 <script>
+    // Pass all products to JS
     window.allProducts = @json($products);
 </script>
 
 <div class="row mb-3">
     <div class="col-md-4">
         <label class="form-label fw-bold">Supplier</label>
-        <select class="form-control" name="supplier_id" required>
+        <select class="form-control" name="supplier_id" id="supplier" required>
             <option value="">-- Select Supplier --</option>
             @foreach($suppliers as $s)
-                <option value="{{ $s->id }}">{{ $s->name }}</option>
+            <option value="{{ $s->id }}">{{ $s->name }}</option>
             @endforeach
         </select>
     </div>
@@ -34,17 +36,17 @@
 
 <div class="table-responsive mb-3">
 <table class="table table-bordered" id="productTable">
-<thead>
-<tr class="text-center">
-    <th>Product</th>
-    <th>Price</th>
-    <th>Qty</th>
-    <th>Tax</th> {{-- ✅ ADDED --}}
-    <th>Total</th>
-    <th>Action</th>
-</tr>
-</thead>
-<tbody></tbody>
+    <thead>
+        <tr class="text-center">
+            <th>Product</th>
+            <th>Price</th>
+            <th>Qty</th>
+            <th>Total</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+
+    <tbody></tbody>
 </table>
 
 <button type="button" class="btn btn-primary" onclick="addRow()">Add Product</button>
@@ -52,22 +54,26 @@
 
 <hr>
 
+{{-- Order Fields --}}
 <div class="row">
     <div class="col-md-3">
         <label>Order Date</label>
         <input type="date" name="order_date" class="form-control" required>
     </div>
+
     <div class="col-md-3">
         <label>Expected Date</label>
-        <input type="date" name="expected_date" class="form-control">
+        <input type="date" name="expected_date" class="form-control" >
     </div>
+
     <div class="col-md-3">
         <label>Delivery Date</label>
         <input type="date" name="delivery_date" class="form-control">
     </div>
+
     <div class="col-md-3">
         <label>Invoice No</label>
-        <input type="text" name="invoice_no" class="form-control">
+        <input type="text" name="invoice_no" class="form-control" >
     </div>
 </div>
 
@@ -100,11 +106,11 @@
         <label>Balance</label>
         <input type="number" class="form-control" id="balance" readonly>
     </div>
+    <div class="col-md-3">
+    <label>Order User</label>
+    <input type="text" name="order_user" class="form-control" placeholder="Enter User Name">
+</div>
 
-    <div class="col-md-3 mt-2">
-        <label>Order User</label>
-        <input type="text" name="order_user" class="form-control">
-    </div>
 </div>
 
 <br>
@@ -124,6 +130,7 @@
         <label>Comment</label>
         <input type="text" name="comment" class="form-control">
     </div>
+    
 </div>
 
 <hr>
@@ -133,55 +140,69 @@
 </form>
 </div>
 </div>
+
 </div>
 
 <script>
 let rowIndex = 0;
 
-// ADD ROW (OLD + TAX DATA)
+// Add product row
 function addRow() {
+    const table = document.querySelector('#productTable tbody');
+
     let row = `
 <tr>
 <td>
 <select class="form-control productSelect" name="products[${rowIndex}][product_id]" required>
-<option value="">-- Select Product --</option>
-${window.allProducts.map(p =>
-`<option value="${p.id}" data-tax="${p.tax}" data-tax-type="${p.tax_type}">${p.name}</option>`
-).join('')}
+    <option value="">-- Select Product --</option>
+    ${window.allProducts.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
 </select>
 </td>
 
 <td><input type="number" class="form-control price" name="products[${rowIndex}][price]" readonly></td>
+
 <td><input type="number" class="form-control qty" name="products[${rowIndex}][qty]" min="1" value="1"></td>
-<td><input type="number" class="form-control tax" readonly></td>
+
 <td><input type="number" class="form-control total" readonly></td>
 
-<td>
-<button type="button" class="btn btn-danger"
-onclick="this.closest('tr').remove(); calculateTotal();">X</button>
-</td>
+<td><button class="btn btn-danger" onclick="this.closest('tr').remove(); calculateTotal();">X</button></td>
 </tr>`;
 
-    document.querySelector('#productTable tbody').insertAdjacentHTML('beforeend', row);
+    table.insertAdjacentHTML('beforeend', row);
     rowIndex++;
 }
 
-// LOAD PRICE (OLD)
-document.addEventListener('change', function(e) {
+// Auto load product price
+document.addEventListener('change', function (e) {
+
     if (e.target.classList.contains('productSelect')) {
-        let row = e.target.closest('tr');
-        fetch('{{ url("admin/orders/product-price") }}/' + e.target.value)
-            .then(r => r.json())
-            .then(p => {
-                row.querySelector('.price').value = p.price;
+
+        let productId = e.target.value;
+
+        fetch('{{ url("admin/orders/product-price") }}/' + productId)
+            .then(res => res.json())
+            .then(product => {
+
+                let row = e.target.closest('tr');
+
+                row.querySelector('.price').value = product.price;
+
                 calculateRow(row);
                 calculateTotal();
-            });
+            })
+            .catch(err => console.error(err));
     }
 });
 
-// QTY CHANGE (OLD)
-document.addEventListener('input', function(e) {
+// Calculate row total
+function calculateRow(row) {
+    let price = parseFloat(row.querySelector('.price').value) || 0;
+    let qty = parseFloat(row.querySelector('.qty').value) || 0;
+    row.querySelector('.total').value = (price * qty).toFixed(2);
+}
+
+// Calculate full total
+document.addEventListener('input', function (e) {
     if (e.target.classList.contains('qty')) {
         let row = e.target.closest('tr');
         calculateRow(row);
@@ -189,39 +210,13 @@ document.addEventListener('input', function(e) {
     }
 });
 
-// ROW TOTAL + TAX (ADDED)
-function calculateRow(row) {
-    let price = parseFloat(row.querySelector('.price').value) || 0;
-    let qty = parseFloat(row.querySelector('.qty').value) || 0;
-
-    let select = row.querySelector('.productSelect');
-    let taxValue = parseFloat(select.selectedOptions[0].dataset.tax) || 0;
-    let taxType = select.selectedOptions[0].dataset.taxType;
-
-    let subTotal = price * qty;
-    let tax = 0;
-
-    if (taxType === 'percent') {
-        tax = (subTotal * taxValue) / 100;
-    } else {
-        tax = taxValue * qty;
-    }
-
-    row.querySelector('.tax').value = tax.toFixed(2);
-    row.querySelector('.total').value = (subTotal + tax).toFixed(2);
-}
-
-// GRAND TOTAL (OLD LOGIC SAFE)
 function calculateTotal() {
-    let sum = 0;
-    document.querySelectorAll('.total').forEach(t => {
-        sum += parseFloat(t.value) || 0;
-    });
-
-    grandTotal.value = sum.toFixed(2);
+    let totals = [...document.querySelectorAll('.total')];
+    let sum = totals.reduce((a, b) => a + (parseFloat(b.value) || 0), 0);
+    document.getElementById('grandTotal').value = sum;
 
     let paid = parseFloat(document.getElementById('paid').value) || 0;
-    balance.value = (sum - paid).toFixed(2);
+    document.getElementById('balance').value = (sum - paid).toFixed(2);
 }
 
 document.getElementById('paid').addEventListener('input', calculateTotal);

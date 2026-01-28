@@ -131,10 +131,7 @@ class Order extends Model
     {
         return $this->hasOne(OrderArea::class, 'order_id');
     }
-public function order_details()
-{
-    return $this->hasMany(OrderDetail::class, 'order_id');
-}
+
     public function salesPerson()
     {
         return $this->belongsTo(SalesPerson::class, 'sales_person_id');

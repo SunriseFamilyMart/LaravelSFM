@@ -235,5 +235,3 @@ const TELEPHONE_CODES = [
     ["name" => 'Zambia (+260)', "code" => '260'],
     ["name" => 'Zimbabwe (+263)', "code" => '263'],
 ];
-
-

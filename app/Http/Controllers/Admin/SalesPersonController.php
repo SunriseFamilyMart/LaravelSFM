@@ -6,49 +6,30 @@ use App\Models\SalesPerson;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
 
 class SalesPersonController extends Controller
 {
-  public function index(Request $request)
-{
-    $query = SalesPerson::query();
+    public function index(Request $request)
+    {
+        $query = SalesPerson::query();
 
-    if ($request->has('search') && $request->search != '') {
-        $search = $request->search;
-        $query->where(function ($q) use ($search) {
-            $q->where('name', 'like', "%{$search}%")
-              ->orWhere('phone_number', 'like', "%{$search}%");
-        });
+        // Search by name or phone number
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('phone_number', 'like', "%{$search}%");
+            });
+        }
+
+        // Paginate results
+        $salesPeople = $query->orderBy('id', 'desc')->paginate(10);
+
+        // Keep the search query in pagination links
+        $salesPeople->appends($request->all());
+
+        return view('sales_person.index', compact('salesPeople'));
     }
-
-    $salesPeople = $query->orderBy('id', 'desc')->paginate(10);
-    $salesPeople->appends($request->all());
-
-    // 🚀 NEW: Fetch order summary for each sales person
-    foreach ($salesPeople as $person) {
-        $summary = DB::table('orders')
-            ->selectRaw("
-                COUNT(*) as total_orders,
-                COUNT(DISTINCT trip_number) as total_trips,
-                COUNT(DISTINCT store_id) as total_shops,
-                SUM(order_amount + total_tax_amount) as total_sales
-            ")
-            ->where('sales_person_id', $person->id)
-            ->whereDate('created_at', today())   // TODAY's summary
-            ->first();
-
-        // Attach computed summary
-        $person->total_orders = $summary->total_orders ?? 0;
-        $person->total_trips = $summary->total_trips ?? 0;
-        $person->total_shops = $summary->total_shops ?? 0;
-        $person->total_sales = $summary->total_sales ?? 0;
-    }
-
-    return view('sales_person.index', compact('salesPeople'));
-}
-
-
 
 
 

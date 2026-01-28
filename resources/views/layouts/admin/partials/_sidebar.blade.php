@@ -46,12 +46,6 @@
                                 </a>
                             </li>
                         @endif
-<li class="nav-item ">
-    <a class="nav-link" href="{{ route('admin.purchase.index') }}" title="Order Management">
-        <i class="tio-file nav-icon"></i>
-        <span class="text-truncate">Purchase Management</span>
-    </a>
-</li>
 
 
                         @if (Helpers::module_permission_check(MANAGEMENT_SECTION['order_management']))
@@ -59,6 +53,12 @@
                                 <small class="nav-subtitle">{{ translate('order_management') }}</small>
                                 <small class="tio-more-horizontal nav-subtitle-replacer"></small>
                             </li>
+<li class="nav-item {{ Request::is('admin/orders/ordermanagement*') ? 'active' : '' }}">
+    <a class="nav-link" href="{{ route('admin.orders.ordermanagement') }}" title="Order Management">
+        <i class="tio-file nav-icon"></i>
+        <span class="text-truncate">Purchase Management</span>
+    </a>
+</li>
 
 
 

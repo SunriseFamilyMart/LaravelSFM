@@ -26,12 +26,9 @@ use App\Http\Controllers\Api\V1\Auth\CustomerAuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\DeliveryManLoginController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\StoreAuthController;
-use App\Http\Controllers\Api\StoreOrderController;
 use App\Http\Controllers\Api\V1\StoreVisitController;
 use App\Http\Controllers\Api\V1\OrderApiController;
 use App\Http\Controllers\Api\V1\DeliveryManAuthController;
-use App\Http\Controllers\Api\V1\UpiPaymentController;
 use Mpdf\Tag\Del;
 
 Route::get('/hello', function () {
@@ -42,7 +39,7 @@ Route::options('/{any}', function (Request $request) {
     return Response::make('', 200, [
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS, PUT, DELETE, PATCH',
-        'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, guest-id, x-localization, X-Store-Token, X-Requested-With',
+        'Access-Control-Allow-Headers' => 'Origin, Content-Type, Accept, Authorization, guest-id, x-localization',
         'Access-Control-Expose-Headers' => '*',
     ]);
 })->where('any', '.*');
@@ -173,6 +170,8 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::group(['prefix' => 'coupon', 'middleware' => ['auth:api', 'customer_is_block']], function () {
         Route::get('list', [CouponController::class, 'list'])->withoutMiddleware(['auth:api', 'customer_is_block']);
         Route::get('apply', [CouponController::class, 'apply'])->withoutMiddleware(['auth:api', 'customer_is_block']);
+
+
     });
 
     Route::group(['prefix' => 'timeSlot'], function () {
@@ -221,7 +220,7 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
             Route::get('/order/payments/list', [DeliverymanController::class, 'index']);
             Route::get('/order/payment-methods', [DeliverymanController::class, 'getPaymentMethods']);
             Route::post('order/delete-product', [DeliverymanController::class, 'deleteOrderProduct']);
-            Route::get('/orders/arrear', [DeliverymanController::class, 'getAllOrdersArrear']);
+             Route::get('/orders/arrear', [DeliverymanController::class, 'getAllOrdersArrear']);
             Route::post('/order-edit-logs', [DeliverymanController::class, 'orderEditLogs']);
 
         });
@@ -250,7 +249,6 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::post('customer/change-language', [CustomerController::class, 'changeLanguage']);
     Route::post('delivery-man/change-language', [DeliverymanController::class, 'changeLanguage']);
 
-    // ===================== SALES PERSON ROUTES =====================
     Route::post('/sales/request-otp', [AuthController::class, 'requestOtp']);
     Route::post('/sales/verify-otp', [AuthController::class, 'verifyOtp']);
     Route::post('/sales/new-customer', [AuthController::class, 'newCustomerApi']);
@@ -261,7 +259,7 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::post('/sales/orders', [AuthController::class, 'orders']);
     Route::get('/sales/customers', [AuthController::class, 'listCustomers']);
     Route::get('/sales/totalorders', [AuthController::class, 'totalOrders']);
-    Route::get('/sales/conversations', [AuthController::class, 'conversations']);
+    Route::get('/sales/conversations', [AuthController::class, 'conversations']); // Get chats
     Route::post('/sales/send-message', [AuthController::class, 'sendMessage']);
     Route::post('/{orderId}/reorder', [AuthController::class, 'reorder']);
     Route::post('/sales/add', [AuthController::class, 'addToCart']);
@@ -271,107 +269,12 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::post('/sales/nearby-stores', [AuthController::class, 'nearbyStores']);
     Route::get('/sales/order-amount', [OrderApiController::class, 'getOrderAmountByToken']);
     Route::get('/sales/distance-today', [AuthController::class, 'getTodayDistance']);
-    Route::post('/sales/store-visit', [StoreVisitController::class, 'store']);
-    Route::get('/sales/store-visits', [StoreVisitController::class, 'index']);
+    Route::post('/sales/store-visit', [\App\Http\Controllers\Api\V1\StoreVisitController::class, 'store']);
+    Route::get('/sales/store-visits', [\App\Http\Controllers\Api\V1\StoreVisitController::class, 'index']);
     Route::get('/sales/delivery-men', [AuthController::class, 'allDeliveryMen']);
     Route::post('/sales/login', [AuthController::class, 'login']);
     Route::get('/orders/arrear', [AuthController::class, 'getAllOrdersArrear']);
 
-    // ===================== SALES PERSON UPI PAYMENT =====================
-    Route::group(['prefix' => 'sales/upi'], function () {
-        // Initiate UPI payment for order
-        Route::post('/initiate', [UpiPaymentController::class, 'initiateSalesPerson']);
-        
-        // Confirm UPI payment with GPay/PhonePe response
-        Route::post('/confirm', [UpiPaymentController::class, 'confirmSalesPerson']);
-        
-        // Cancel pending payment
-        Route::post('/cancel', [UpiPaymentController::class, 'cancel']);
-        
-        // Check payment status
-        Route::get('/status/{payment_ref}', [UpiPaymentController::class, 'status']);
-    });
 
-    // ===================== STORE SELF APP =====================
-    // Store cannot login until admin approves + assigns salesperson.
-    Route::post('/store/register', [StoreAuthController::class, 'register']);
-    Route::post('/store/login', [StoreAuthController::class, 'login']);
-    Route::post('/store/verify-otp', [StoreAuthController::class, 'verifyOtp']);
-    
-    // Store authenticated routes
-    Route::group(['prefix' => 'store', 'middleware' => 'store.auth'], function () {
-        // Profile with arrear amount and sales person details (name, phone)
-        Route::get('/me', [StoreAuthController::class, 'me']);
-        
-        // Get arrear/outstanding amount details
-        Route::get('/arrear', [StoreAuthController::class, 'getArrear']);
-        
-        // Logout
-        Route::post('/logout', [StoreAuthController::class, 'logout']);
-        
-        // Orders
-        Route::get('/orders', [StoreOrderController::class, 'index']);
-        Route::post('/orders', [StoreOrderController::class, 'place']);
-        
-        // ===================== STORE UPI PAYMENT =====================
-        Route::group(['prefix' => 'upi'], function () {
-            // Initiate UPI payment for order
-            Route::post('/initiate', [UpiPaymentController::class, 'initiateStore']);
-            
-            // Confirm UPI payment with GPay/PhonePe response
-            Route::post('/confirm', [UpiPaymentController::class, 'confirmStore']);
-            
-            // Cancel pending payment
-            Route::post('/cancel', [UpiPaymentController::class, 'cancel']);
-            
-            // Check payment status
-            Route::get('/status/{payment_ref}', [UpiPaymentController::class, 'status']);
-        });
-    });
-
-    // ===================== ONLINE PAYMENT SYSTEM =====================
-    // Real-time payment intent system (like GPay/PhonePe)
-    Route::group(['prefix' => 'payment'], function () {
-        // Get UPI/Bank details for payment
-        Route::get('/upi-details', [\App\Http\Controllers\Api\V1\OnlinePaymentController::class, 'getUpiDetails']);
-        
-        // Create payment intent (returns UPI details + payment reference)
-        Route::post('/create-intent', [\App\Http\Controllers\Api\V1\OnlinePaymentController::class, 'createIntent']);
-        
-        // Check payment status (for real-time polling)
-        Route::get('/status/{payment_ref}', [\App\Http\Controllers\Api\V1\OnlinePaymentController::class, 'checkStatus']);
-        
-        // Cancel payment
-        Route::post('/cancel', [\App\Http\Controllers\Api\V1\OnlinePaymentController::class, 'cancelPayment']);
-    });
-
-    // Delivery man confirms payment
-    Route::group(['prefix' => 'delivery-man', 'middleware' => 'deliveryman_is_active'], function () {
-        Route::post('/payment/confirm', [\App\Http\Controllers\Api\V1\OnlinePaymentController::class, 'confirmPayment']);
-    });
-
-    // ===================== UPI INTENT PAYMENT (GPay/PhonePe) =====================
-    // Captures actual UPI response from GPay/PhonePe/Paytm/BHIM
-    
-    // Public endpoint - Get UPI merchant details
-    Route::get('/upi/details', [UpiPaymentController::class, 'getUpiDetails']);
-    
-    // Delivery Man UPI Payment endpoints
-    Route::group(['prefix' => 'delivery-man/upi', 'middleware' => 'deliveryman_is_active'], function () {
-        // Initiate UPI payment - Creates payment intent
-        Route::post('/initiate', [UpiPaymentController::class, 'initiate']);
-        
-        // Confirm UPI payment - With actual GPay/PhonePe response
-        Route::post('/confirm', [UpiPaymentController::class, 'confirm']);
-        
-        // Cancel pending UPI payment
-        Route::post('/cancel', [UpiPaymentController::class, 'cancel']);
-        
-        // Check payment status
-        Route::get('/status/{payment_ref}', [UpiPaymentController::class, 'status']);
-    });
-    
-    // Admin - Mark payment as settled (after bank reconciliation)
-    Route::post('/admin/upi/settle', [UpiPaymentController::class, 'markAsSettled']);
 
 });

@@ -105,7 +105,7 @@
 
             @if ($status == 'all')
                 <div class="p-20px pb-0 mt-4">
-<div class="row g-3 g-sm-4 g-md-3 g-lg-4">
+                    <div class="row g-3 g-sm-4 g-md-3 g-lg-4">
 
                         <div class="col-sm-6 col-lg-3">
                             <a class="order--card h-100" href="{{ route('admin.orders.list', ['pending']) }}">
@@ -229,28 +229,6 @@
                 </div>
             @endif
 
-            @if($status=='returned')
-                @php
-                    $rt = $returnType ?? request('return_type','all');
-                @endphp
-                <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
-                    <a href="{{ request()->fullUrlWithQuery(['return_type'=>'all','page'=>1]) }}"
-                       class="btn btn-sm {{ $rt=='all' ? 'btn--primary' : 'btn-outline-primary-2' }}">
-                        {{ translate('Returned') }} ({{ $returnedTypeCounts['all'] ?? 0 }})
-                    </a>
-                    <a href="{{ request()->fullUrlWithQuery(['return_type'=>'partial','page'=>1]) }}"
-                       class="btn btn-sm {{ $rt=='partial' ? 'btn--primary' : 'btn-outline-primary-2' }}">
-                        {{ translate('Partial Return') }} ({{ $returnedTypeCounts['partial'] ?? 0 }})
-                    </a>
-                    <a href="{{ request()->fullUrlWithQuery(['return_type'=>'full','page'=>1]) }}"
-                       class="btn btn-sm {{ $rt=='full' ? 'btn--primary' : 'btn-outline-primary-2' }}">
-                        {{ translate('Full Return') }} ({{ $returnedTypeCounts['full'] ?? 0 }})
-                    </a>
-                    <span class="text-muted small ml-2">{{ translate('Based on order edit logs') }}</span>
-                </div>
-            @endif
-
-
             <div class="card-body p-20px">
                 <div class="order-top">
                     <div class="card--header">
@@ -313,7 +291,7 @@
                                 <th>{{ translate('Time Slot') }}</th>
                                 <th>{{ translate('customer') }}</th>
                                 <th>{{ translate('branch') }}</th>
-                                <th>{{ translate('Order amount') }}</th>
+                                <th>{{ translate('total amount') }}</th>
                                <th>{{ translate('Paid Amount') }}</th>
                                            
                                 <th>
@@ -321,15 +299,7 @@
                                         {{ translate('order') }} {{ translate('status') }}
                                     </div>
                                 </th>
-                                                                @if($status=='returned')
                                 <th>
-                                    <div class="text-center">
-                                        {{ translate('Return') }}
-                                    </div>
-                                </th>
-                                @endif
-
-<th>
                                     <div class="text-center">
                                         {{ translate('order') }} {{ translate('type') }}
                                     </div>
@@ -475,29 +445,7 @@
                                             </span>
                                         @endif
                                     </td>
-                                                                        @if($status=='returned')
-                                    @php
-                                        $meta = $returnMeta[$order['id']] ?? null;
-                                        $rtype = $meta['type'] ?? 'full';
-                                        $badgeClass = $rtype=='partial' ? 'badge-soft-warning' : 'badge-soft-success';
-                                    @endphp
-                                    <td class="text-center">
-                                        <span class="badge {{ $badgeClass }}">
-                                            {{ $rtype=='partial' ? translate('Partial') : translate('Full') }}
-                                        </span>
-                                        <div class="small text-muted mt-1">
-                                            {{ (int)($meta['items_count'] ?? 0) }} {{ translate('items') }} •
-                                            {{ (int)($meta['total_return_qty'] ?? 0) }} {{ translate('qty') }}
-                                        </div>
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-primary-2 mt-2 js-return-view"
-                                                data-order-id="{{ $order['id'] }}">
-                                            {{ translate('View') }}
-                                        </button>
-                                    </td>
-                                    @endif
-
-<td class="text-capitalize text-center">
+                                    <td class="text-capitalize text-center">
                                         @if ($order['order_type'] == 'take_away')
                                             <span class="badge badge-soft-info">
                                                 {{ translate('take_away') }}
@@ -545,221 +493,6 @@
     </div>
 @endsection
 
-
-@if($status=='returned')
-    <!-- Professional Return Logs Modal -->
-    <div class="modal fade" id="returnLogModal" tabindex="-1" role="dialog" aria-labelledby="returnLogModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
-            <div class="modal-content">
-                <div class="modal-header border-0 pb-0">
-                    <div>
-                        <h5 class="modal-title mb-1" id="returnLogModalLabel">
-                            <i class="tio-replay text-primary mr-2"></i>
-                            {{ translate('Return Details') }}
-                        </h5>
-                        <p class="text-muted mb-0 small" id="returnLogOrderInfo"></p>
-                    </div>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body pt-2">
-                    <div id="returnLogLoading" class="text-center p-4" style="display:none;">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="sr-only">{{ translate('Loading') }}...</span>
-                        </div>
-                        <p class="text-muted mt-2">{{ translate('Loading return details') }}...</p>
-                    </div>
-
-                    <div id="returnLogContent" style="display:none;">
-                        <!-- Summary Card -->
-                        <div class="card mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                            <div class="card-body text-white py-3">
-                                <div class="d-flex justify-content-between align-items-center flex-wrap">
-                                    <div>
-                                        <span class="badge text-uppercase px-3 py-2" id="returnLogTypeBadge" style="background: rgba(255,255,255,0.2);"></span>
-                                    </div>
-                                    <div class="text-right" id="returnLogSummary"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Items Table -->
-                        <div class="table-responsive">
-                            <table class="table table-hover table-borderless table-thead-bordered table-nowrap table-align-middle card-table">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th style="width: 35%;">{{ translate('Item') }}</th>
-                                        <th class="text-center" style="width: 15%;">{{ translate('Original Qty') }}</th>
-                                        <th class="text-center" style="width: 15%;">{{ translate('Current Qty') }}</th>
-                                        <th class="text-center" style="width: 15%;">{{ translate('Returned') }}</th>
-                                        <th style="width: 20%;">{{ translate('Reason') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="returnLogRows"></tbody>
-                            </table>
-                        </div>
-
-                        <!-- Price Summary -->
-                        <div class="card bg-light mt-3" id="returnLogPriceSummary" style="display:none;">
-                            <div class="card-body py-3">
-                                <h6 class="mb-2">
-                                    <i class="tio-money mr-1 text-primary"></i>
-                                    {{ translate('Price Impact') }}
-                                </h6>
-                                <div id="returnLogPriceContent"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="returnLogError" class="alert alert-danger" style="display:none;"></div>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">{{ translate('Close') }}</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <style>
-        #returnLogModal .badge-partial { background: #fff3cd; color: #856404; }
-        #returnLogModal .badge-full { background: #f8d7da; color: #721c24; }
-        #returnLogModal .qty-badge { padding: 4px 12px; border-radius: 20px; font-weight: 600; }
-        #returnLogModal .qty-original { background: #e9ecef; color: #495057; }
-        #returnLogModal .qty-current { background: #d4edda; color: #155724; }
-        #returnLogModal .qty-returned { background: #f8d7da; color: #721c24; }
-        #returnLogModal .reason-chip { 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 5px;
-            background: #fff8e1; 
-            border-left: 3px solid #ffc107; 
-            padding: 6px 12px; 
-            border-radius: 0 8px 8px 0;
-            font-size: 13px;
-        }
-        #returnLogModal .photo-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            color: #667eea;
-            font-weight: 500;
-        }
-        #returnLogModal .photo-link:hover { text-decoration: underline; }
-    </style>
-@endif
-
 @push('script_2')
     <script src="{{ asset('public/assets/admin/js/flatpicker.js') }}"></script>
-@if($status=='returned')
-<script>
-    (function(){
-        function esc(str){ return (str||'').toString().replace(/[&<>"']/g, function(m){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]);}); }
-        function formatPrice(val){ return '₹' + parseFloat(val || 0).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,'); }
-        
-        $(document).on('click', '.js-return-view', function(){
-            var orderId = $(this).data('order-id');
-            $('#returnLogError').hide().text('');
-            $('#returnLogContent').hide();
-            $('#returnLogRows').html('');
-            $('#returnLogPriceSummary').hide();
-            $('#returnLogOrderInfo').text('Order #' + orderId);
-            $('#returnLogLoading').show();
-            $('#returnLogModal').modal('show');
-
-            var url = "{{ route('admin.orders.returned-logs', ['order_id' => 'ORDER_ID']) }}".replace('ORDER_ID', orderId);
-            $.get(url)
-                .done(function(res){
-                    $('#returnLogLoading').hide();
-                    var type = (res.type || 'full');
-                    var typeLabel = type === 'partial' ? 'PARTIAL RETURN' : 'FULL RETURN';
-                    var badgeClass = type === 'partial' ? 'badge-partial' : 'badge-full';
-                    
-                    $('#returnLogTypeBadge')
-                        .removeClass('badge-partial badge-full')
-                        .addClass(badgeClass)
-                        .html('<i class="' + (type === 'partial' ? 'tio-replay' : 'tio-clear-circle') + ' mr-1"></i>' + typeLabel);
-                    
-                    var itemsCount = res.summary?.items_count || 0;
-                    var totalQty = res.summary?.total_return_qty || 0;
-                    $('#returnLogSummary').html(
-                        '<span class="h3 mb-0">' + itemsCount + '</span> <small>items</small> &nbsp;&bull;&nbsp; ' +
-                        '<span class="h3 mb-0">' + totalQty + '</span> <small>qty returned</small>'
-                    );
-                    
-                    var rows = '';
-                    var totalOldPrice = 0;
-                    var totalNewPrice = 0;
-                    
-                    (res.items || []).forEach(function(it){
-                        var photoHtml = '';
-                        if(it.photo){
-                            var href = "{{ asset('storage') }}" + '/' + it.photo;
-                            photoHtml = '<a href="' + href + '" target="_blank" class="photo-link ml-2">' +
-                                        '<i class="tio-image"></i> View</a>';
-                        }
-                        
-                        var oldQty = parseInt(it.old_quantity) || 0;
-                        var newQty = parseInt(it.new_quantity) || 0;
-                        var returnedQty = parseInt(it.returned_qty) || 0;
-                        
-                        rows += '<tr>' +
-                            '<td>' +
-                                '<div class="font-weight-bold">' + esc(it.product_name) + '</div>' +
-                                '<small class="text-muted">#' + esc(it.order_detail_id) + '</small>' +
-                            '</td>' +
-                            '<td class="text-center"><span class="qty-badge qty-original">' + oldQty + '</span></td>' +
-                            '<td class="text-center"><span class="qty-badge qty-current">' + newQty + '</span></td>' +
-                            '<td class="text-center"><span class="qty-badge qty-returned">-' + returnedQty + '</span></td>' +
-                            '<td>' +
-                                '<div class="reason-chip">' +
-                                    '<i class="tio-info-outlined"></i>' + esc(it.reason || 'N/A') +
-                                '</div>' +
-                                photoHtml +
-                            '</td>' +
-                        '</tr>';
-                        
-                        // Calculate price totals if history available
-                        if(it.history && it.history.length > 0) {
-                            var first = it.history[0];
-                            var last = it.history[it.history.length - 1];
-                            totalOldPrice += parseFloat(first.old_price) || 0;
-                            totalNewPrice += parseFloat(last.new_price) || 0;
-                        }
-                    });
-                    
-                    $('#returnLogRows').html(rows);
-                    
-                    // Show price summary if we have price data
-                    if(totalOldPrice > 0 || totalNewPrice > 0) {
-                        var priceDiff = totalOldPrice - totalNewPrice;
-                        var priceHtml = '<div class="d-flex justify-content-between mb-1">' +
-                            '<span>Original Total:</span>' +
-                            '<span class="text-muted">' + formatPrice(totalOldPrice) + '</span>' +
-                        '</div>' +
-                        '<div class="d-flex justify-content-between mb-1">' +
-                            '<span>Current Total:</span>' +
-                            '<span class="font-weight-bold">' + formatPrice(totalNewPrice) + '</span>' +
-                        '</div>' +
-                        '<hr class="my-2">' +
-                        '<div class="d-flex justify-content-between">' +
-                            '<span class="font-weight-bold">Reduction:</span>' +
-                            '<span class="text-danger font-weight-bold">-' + formatPrice(priceDiff) + '</span>' +
-                        '</div>';
-                        
-                        $('#returnLogPriceContent').html(priceHtml);
-                        $('#returnLogPriceSummary').show();
-                    }
-                    
-                    $('#returnLogContent').show();
-                })
-                .fail(function(xhr){
-                    $('#returnLogLoading').hide();
-                    $('#returnLogError').show().text('{{ translate("Failed to load return logs. Please try again.") }}');
-                });
-        });
-    })();
-</script>
-@endif
-
 @endpush

@@ -117,36 +117,12 @@
                                         </td>
                                         <td>{{ $trip->created_at->format('d M Y H:i') }}</td>
 
-                                        <!-- ✅ Trip actions -->
+                                        <!-- ✅ Trip-wise invoice download -->
                                         <td>
-                                            <div class="btn-group" role="group" aria-label="Trip actions">
-                                                <a href="{{ route('admin.delivery_trips.create', ['download' => 1, 'trip_number' => $trip->trip_number]) }}"
-                                                    class="btn btn-sm btn-outline-secondary">
-                                                    <i class="bi bi-file-earmark-pdf"></i> PDF
-                                                </a>
-
-                                                @if ($trip->status !== 'completed')
-                                                    <button type="button" class="btn btn-sm btn-outline-primary js-trip-reassign"
-                                                        data-trip-id="{{ $trip->id }}"
-                                                        data-trip-number="{{ $trip->trip_number }}"
-                                                        data-current-dm-name="{{ $trip->deliveryMan->f_name }} {{ $trip->deliveryMan->l_name }}">
-                                                        <i class="bi bi-arrow-repeat"></i> Reassign
-                                                    </button>
-                                                @else
-                                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
-                                                        <i class="bi bi-arrow-repeat"></i> Reassign
-                                                    </button>
-                                                @endif
-
-                                                <button type="button" class="btn btn-sm btn-outline-dark js-trip-history"
-                                                    data-trip-id="{{ $trip->id }}"
-                                                    data-trip-number="{{ $trip->trip_number }}">
-                                                    <i class="bi bi-clock-history"></i> History
-                                                    @if (($trip->reassignments_count ?? 0) > 0)
-                                                        <span class="badge badge-dark ml-1">{{ $trip->reassignments_count }}</span>
-                                                    @endif
-                                                </button>
-                                            </div>
+                                            <a href="{{ route('admin.delivery_trips.create', ['download' => 1, 'trip_number' => $trip->trip_number]) }}"
+                                                class="btn btn-sm btn-outline-secondary">
+                                                <i class="bi bi-file-earmark-pdf"></i> PDF
+                                            </a>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -154,97 +130,6 @@
                         </table>
                     </div>
                 @endif
-            </div>
-        </div>
-    </div>
-
-
-
-    <!-- Reassign Trip Modal -->
-    <div class="modal fade" id="tripReassignModal" tabindex="-1" role="dialog" aria-labelledby="tripReassignModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="tripReassignModalLabel">Reassign Trip</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <form method="POST" action="{{ route('admin.delivery_trips.reassign') }}">
-                    @csrf
-                    <div class="modal-body">
-                        <input type="hidden" name="trip_id" id="reassignTripId" value="">
-
-                        <div class="mb-2">
-                            <div class="small text-muted">Trip</div>
-                            <div class="fw-bold" id="reassignTripNumber">-</div>
-                            <div class="small text-muted">Current delivery man: <span id="reassignCurrentDm">-</span></div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">New Delivery Man</label>
-                            <select name="delivery_man_id" class="form-select" required>
-                                <option value="">-- Select --</option>
-                                @foreach ($deliveryMen as $dm)
-                                    <option value="{{ $dm->id }}">{{ $dm->f_name }} {{ $dm->l_name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="mb-0">
-                            <label class="form-label fw-semibold">Reason (optional)</label>
-                            <input type="text" name="reason" class="form-control" maxlength="255" placeholder="e.g., Rider unavailable / route optimization">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Reassign</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Trip Reassignment History Modal -->
-    <div class="modal fade" id="tripHistoryModal" tabindex="-1" role="dialog" aria-labelledby="tripHistoryModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="tripHistoryModalLabel">Trip History</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div id="tripHistoryLoading" class="text-center p-3" style="display:none;">
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        <span class="ml-2">Loading...</span>
-                    </div>
-
-                    <div id="tripHistoryEmpty" class="text-center text-muted p-3" style="display:none;">
-                        No reassignment history.
-                    </div>
-
-                    <div id="tripHistoryContent" style="display:none;">
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>From</th>
-                                        <th>To</th>
-                                        <th>By</th>
-                                        <th>Reason</th>
-                                        <th>At</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tripHistoryRows"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div id="tripHistoryError" class="alert alert-danger" style="display:none;"></div>
-                </div>
             </div>
         </div>
     </div>
@@ -266,94 +151,6 @@
             });
         });
     </script>
-
-
-
-    <script>
-    // NOTE: layout loads vendor.min.js (jQuery) AFTER @yield('content'),
-    // so this page script must wait until window load to access $ / bootstrap modal.
-    window.addEventListener('load', function () {
-        if (typeof window.jQuery === 'undefined') {
-            console.error('jQuery not available yet. Check vendor.min.js include.');
-            return;
-        }
-
-        (function ($) {
-            function esc(str) {
-                return (str || '').toString().replace(/[&<>"']/g, function (m) {
-                    return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]);
-                });
-            }
-
-            // Reassign modal open
-            $(document).on('click', '.js-trip-reassign', function () {
-                var tripId = $(this).data('trip-id');
-                var tripNumber = $(this).data('trip-number');
-                var currentDm = $(this).data('current-dm-name');
-
-                $('#reassignTripId').val(tripId);
-                $('#reassignTripNumber').text(tripNumber);
-                $('#reassignCurrentDm').text(currentDm);
-                $('#tripReassignModal').appendTo('body').modal('show');
-            });
-
-            // History modal open
-            $(document).on('click', '.js-trip-history', function () {
-                var tripId = $(this).data('trip-id');
-                var tripNumber = $(this).data('trip-number');
-
-                $('#tripHistoryModalLabel').text('Trip History — ' + tripNumber);
-                $('#tripHistoryError').hide().text('');
-                $('#tripHistoryContent').hide();
-                $('#tripHistoryEmpty').hide();
-                $('#tripHistoryRows').html('');
-                $('#tripHistoryLoading').show();
-
-                $('#tripHistoryModal').appendTo('body').modal('show');
-
-                var url = "{{ route('admin.delivery_trips.history', ['trip_id' => 'TRIP_ID']) }}".replace('TRIP_ID', tripId);
-
-                $.get(url)
-                    .done(function (res) {
-                        $('#tripHistoryLoading').hide();
-                        var items = res.items || [];
-                        if (!items.length) {
-                            $('#tripHistoryEmpty').show();
-                            return;
-                        }
-
-                        var rows = '';
-                        items.forEach(function (it, idx) {
-                            var from = it.from || '-';
-                            var to = it.to || '-';
-                            var by = it.by || '-';
-                            var reason = it.reason || '-';
-                            var at = it.created_at || '-';
-
-                            rows += '<tr>'
-                                + '<td>' + (idx + 1) + '</td>'
-                                + '<td>' + esc(from) + (it.from_status ? '<div class="small text-muted">' + esc(it.from_status) + '</div>' : '') + '</td>'
-                                + '<td>' + esc(to) + (it.to_status ? '<div class="small text-muted">' + esc(it.to_status) + '</div>' : '') + '</td>'
-                                + '<td>' + esc(by) + '</td>'
-                                + '<td>' + esc(reason) + '</td>'
-                                + '<td>' + esc(at) + '</td>'
-                                + '</tr>';
-                        });
-
-                        $('#tripHistoryRows').html(rows);
-                        $('#tripHistoryContent').show();
-                    })
-                    .fail(function (xhr) {
-                        $('#tripHistoryLoading').hide();
-                        var msg = 'Failed to load trip history';
-                        if (xhr && xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
-                        $('#tripHistoryError').show().text(msg);
-                    });
-            });
-        })(window.jQuery);
-    });
-</script>
-
 
     <!-- Custom Styles -->
     <style>

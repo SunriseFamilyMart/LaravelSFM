@@ -18,29 +18,17 @@ class Store extends Model
         'longitude',
         'sales_person_id',
         'store_photo',
-        'gst_number', // 👈 add this
-
-        // ✅ Store self-registration + approval
-        'registration_source', // 'sales_person' | 'self'
-        'approval_status',     // 'pending' | 'approved' | 'rejected'
-        'can_login',           // bool
-        'password',            // hashed password for store login
-        'auth_token',          // store auth token
-        'approved_by',
-        'approved_at',
-
-
+        'gst_number',
+        'route_name',
+        'street_address',
+        'area',
+        'city',
+        'taluk',
+        'district',
+        'state',
+        'pincode',
+        'full_address'
     ];
-
-    /**
-     * Cast DB types so strict checks behave correctly.
-     * (can_login is stored as tinyint(1) in MySQL)
-     */
-    protected $casts = [
-        'can_login' => 'boolean',
-        'approved_at' => 'datetime',
-    ];
-
 
     public function salesPerson()
     {

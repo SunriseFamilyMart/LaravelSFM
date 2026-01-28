@@ -3,7 +3,6 @@
 namespace App\Model;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Model\OrderEditLog;
 
 class OrderDetail extends Model
 {
@@ -16,7 +15,6 @@ class OrderDetail extends Model
         'discount_on_product',
         'discount_type',
         'quantity',
-        'total_quantity',
         'tax_amount',
         'variant',
         'unit',
@@ -59,10 +57,7 @@ class OrderDetail extends Model
     {
         return $this->hasMany(OrderDetail::class, 'order_id');
     }
-public function editLogs()
-{
-    return $this->hasMany(OrderEditLog::class, 'order_detail_id');
-}
+
 }
 
 

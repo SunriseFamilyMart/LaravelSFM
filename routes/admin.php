@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\DeliveryDetailsController;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Route; // Ensure this line is present
 use App\Http\Controllers\Admin\AnalyticController;
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\System\AddonController;
@@ -43,7 +43,7 @@ use App\Http\Controllers\Admin\StoreController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\DeliveryTripController;
 use App\Http\Controllers\Admin\RolesAccessController;
-use App\Http\Controllers\Admin\AdminPurchaseController;
+
 
 
 Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
@@ -57,49 +57,22 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
     });
 
     Route::group(['middleware' => ['admin', 'employee_active_check']], function () {
-        
-        // Sales Person Routes
         Route::resource('sales-person', SalesPersonController::class);
-        
-        // Inventory Routes
         Route::resource('inventories', InventoryController::class);
         Route::post('inventories/reset-password', [InventoryController::class, 'resetPassword'])
             ->name('inventories.reset-password');
-        
-        // ==================== DELIVERY TRIPS ROUTES ====================
         Route::prefix('delivery-trips')->group(function () {
             Route::get('/create', [DeliveryTripController::class, 'create'])->name('delivery_trips.create');
             Route::post('/store', [DeliveryTripController::class, 'store'])->name('delivery_trips.store');
-            Route::post('/reassign', [DeliveryTripController::class, 'reassign'])->name('delivery_trips.reassign');
-            Route::get('/history/{trip_id}', [DeliveryTripController::class, 'history'])->name('delivery_trips.history');
         });
-        // ==================== END DELIVERY TRIPS ROUTES ====================
 
-        // Store Routes
         Route::resource('stores', StoreController::class);
         Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
             ->name('stores.updateSalesPerson');
-
-        // Store self-registration approvals
-        Route::get('/stores/pending/self', [StoreController::class, 'pendingSelf'])
-            ->name('stores.pendingSelf');
-        Route::patch('/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])
-            ->name('stores.approveSelf');
-        Route::patch('/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])
-            ->name('stores.rejectSelf');
-		
-		  
-        // Store location management
-        Route::patch('/stores/{store}/update-location', [StoreController::class, 'updateLocation'])
-            ->name('stores.updateLocation');
-        Route::post('/stores/{store}/geocode', [StoreController::class, 'geocodeAddress'])
-            ->name('stores.geocode');
-        
-        // Roles Access Routes
         Route::resource('roles-access', RolesAccessController::class);
 
-        // Dashboard Routes
-        Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('dashboard');
+
+        Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('dashboard');     //test route
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
         Route::post('order-stats', [DashboardController::class, 'orderStats'])->name('order-stats');
         Route::get('settings', [SystemController::class, 'settings'])->name('settings');
@@ -108,23 +81,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::get('/get-restaurant-data', [SystemController::class, 'restaurantData'])->name('get-restaurant-data');
         Route::get('dashboard/order-statistics', [DashboardController::class, 'getOrderStatistics'])->name('dashboard.order-statistics');
         Route::get('dashboard/earning-statistics', [DashboardController::class, 'getEarningStatistics'])->name('dashboard.earning-statistics');
-        Route::get('/table-indexes', [DashboardController::class, 'showAllTableIndexes'])->name('admin.tableIndexes');
+           Route::get('/table-indexes', [DashboardController::class, 'showAllTableIndexes'])->name('admin.tableIndexes');
 
-        // ==================== ADMIN PURCHASE ROUTES ====================
-        Route::group(['prefix' => 'purchase', 'as' => 'purchase.'], function () {
-            Route::get('/', [AdminPurchaseController::class, 'index'])->name('index');
-            Route::get('/create', [AdminPurchaseController::class, 'create'])->name('create');
-            Route::post('/store', [AdminPurchaseController::class, 'store'])->name('store');
-            Route::get('/show/{id}', [AdminPurchaseController::class, 'show'])->name('show');
-            Route::get('/edit/{id}', [AdminPurchaseController::class, 'edit'])->name('edit');
-            Route::post('/update/{id}', [AdminPurchaseController::class, 'update'])->name('update');
-            Route::delete('/delete/{id}', [AdminPurchaseController::class, 'destroy'])->name('delete');
-            Route::get('/status/{id}/{status}', [AdminPurchaseController::class, 'status'])->name('status');
-            Route::get('/export', [AdminPurchaseController::class, 'export'])->name('export');
-        });
-        // ==================== END ADMIN PURCHASE ROUTES ====================
-
-        // Custom Role Routes
         Route::group(['prefix' => 'custom-role', 'as' => 'custom-role.', 'middleware' => ['module:user_management']], function () {
             Route::get('create', [CustomRoleController::class, 'create'])->name('create');
             Route::post('create', [CustomRoleController::class, 'store'])->name('store');
@@ -135,7 +93,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('export', [CustomRoleController::class, 'export'])->name('export');
         });
 
-        // Employee Routes
         Route::group(['prefix' => 'employee', 'as' => 'employee.', 'middleware' => ['module:user_management']], function () {
             Route::get('add-new', [EmployeeController::class, 'index'])->name('add-new');
             Route::post('add-new', [EmployeeController::class, 'store']);
@@ -146,8 +103,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::delete('delete/{id}', [EmployeeController::class, 'delete'])->name('delete');
             Route::get('export', [EmployeeController::class, 'export'])->name('export');
         });
-
-        // POS Routes
         Route::group(['prefix' => 'pos', 'as' => 'pos.', 'middleware' => ['module:pos_management']], function () {
             Route::get('/', [POSController::class, 'index'])->name('index');
             Route::get('quick-view', [POSController::class, 'quickView'])->name('quick-view');
@@ -163,6 +118,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('order', [POSController::class, 'placeOrder'])->name('order');
             Route::get('orders', [POSController::class, 'orderList'])->name('orders');
             Route::get('order-details/{id}', [POSController::class, 'orderDetails'])->name('order-details');
+          
             Route::get('invoice/{id}', [POSController::class, 'generateInvoice']);
             Route::any('store-keys', [POSController::class, 'storeKeys'])->name('store-keys');
             Route::get('orders/export', [POSController::class, 'exportOrders'])->name('orders.export');
@@ -170,9 +126,9 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('add-delivery-address', [POSController::class, 'addDeliveryInfo'])->name('add-delivery-address');
             Route::get('get-distance', [POSController::class, 'getDistance'])->name('get-distance');
             Route::post('order_type/store', [POSController::class, 'orderTypeStore'])->name('order_type.store');
+
         });
 
-        // Banner Routes
         Route::group(['prefix' => 'banner', 'as' => 'banner.', 'middleware' => ['module:promotion_management']], function () {
             Route::get('add-new', [BannerController::class, 'index'])->name('add-new');
             Route::post('store', [BannerController::class, 'store'])->name('store');
@@ -182,7 +138,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::delete('delete/{id}', [BannerController::class, 'delete'])->name('delete');
         });
 
-        // Discount Routes
         Route::group(['prefix' => 'discount', 'as' => 'discount.', 'middleware' => ['module:promotion_management']], function () {
             Route::get('add-new', [DiscountController::class, 'index'])->name('add-new');
             Route::post('store', [DiscountController::class, 'store'])->name('store');
@@ -193,7 +148,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::delete('delete/{id}', [DiscountController::class, 'delete'])->name('delete');
         });
 
-        // Attribute Routes
         Route::group(['prefix' => 'attribute', 'as' => 'attribute.', 'middleware' => ['module:product_management']], function () {
             Route::get('add-new', [AttributeController::class, 'index'])->name('add-new');
             Route::post('store', [AttributeController::class, 'store'])->name('store');
@@ -203,7 +157,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('status/{id}/{status}', [AttributeController::class, 'status'])->name('status');
         });
 
-        // Branch Routes
         Route::group(['prefix' => 'branch', 'as' => 'branch.', 'middleware' => ['module:system_management']], function () {
             Route::get('add-new', [BranchController::class, 'index'])->name('add-new');
             Route::get('list', [BranchController::class, 'list'])->name('list');
@@ -214,7 +167,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('status/{id}/{status}', [BranchController::class, 'status'])->name('status');
         });
 
-        // Delivery Man Routes
         Route::group(['prefix' => 'delivery-man', 'as' => 'delivery-man.', 'middleware' => ['module:user_management']], function () {
             Route::get('add', [DeliveryManController::class, 'index'])->name('add');
             Route::post('store', [DeliveryManController::class, 'store'])->name('store');
@@ -234,7 +186,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             });
         });
 
-        // Notification Routes
         Route::group(['prefix' => 'notification', 'as' => 'notification.', 'middleware' => ['module:promotion_management']], function () {
             Route::get('add-new', [NotificationController::class, 'index'])->name('add-new');
             Route::post('store', [NotificationController::class, 'store'])->name('store');
@@ -244,7 +195,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::delete('delete/{id}', [NotificationController::class, 'delete'])->name('delete');
         });
 
-        // Product Routes
         Route::group(['prefix' => 'product', 'as' => 'product.', 'middleware' => ['module:product_management']], function () {
             Route::get('add-new', [ProductController::class, 'index'])->name('add-new');
             Route::post('variant-combination', [ProductController::class, 'variantCombination'])->name('variant-combination');
@@ -268,10 +218,8 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('feature/{id}/{is_featured}', [ProductController::class, 'feature'])->name('feature');
         });
 
-        // Orders Routes (plural)
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
-            Route::get('returned-logs/{order_id}', [OrderController::class, 'returnedLogs'])->name('returned-logs');
             Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
             Route::get('status', [OrderController::class, 'status'])->name('status');
             Route::get('add-delivery-man/{order_id}/{delivery_man_id}', [OrderController::class, 'addDeliveryman'])->name('add-delivery-man');
@@ -283,47 +231,57 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('export/{status}', [OrderController::class, 'exportOrders'])->name('export');
             Route::get('verify-offline-payment/{order_id}/{status}', [OrderController::class, 'verifyOfflinePayment']);
             Route::post('update-order-delivery-area/{order_id}', [OrderController::class, 'updateOrderDeliveryArea'])->name('update-order-delivery-area');
-            Route::get('ordermanagement', [OrderController::class, 'orderManagement'])->name('ordermanagement');
-            Route::post('adjust-item', [OrderController::class, 'adjustItem'])->name('adjust-item');
-            Route::get('/orders/create', [OrderController::class, 'createOrder'])->name('orders.create');
-            Route::post('/orders/store', [OrderController::class, 'storeOrder'])->name('orders.store');
-            Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])->name('orders.update');
-            Route::post('update/{id}', [OrderController::class, 'updateOrder'])->name('update');
-            Route::get('/product-price/{id}', [OrderController::class, 'getProductPrice'])->name('product.price');
-            Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])->name('supplier.products');
+         Route::get('ordermanagement', [OrderController::class, 'orderManagement'])->name('ordermanagement'); 
+      
+  Route::get('/orders/create', [OrderController::class, 'createOrder'])
+        ->name('orders.create');
+
+    Route::post('/orders/store', [OrderController::class, 'storeOrder'])
+        ->name('orders.store');
+Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
+    ->name('orders.update');
+ Route::post('update/{id}', [OrderController::class, 'updateOrder'])->name('update');
+   
+    // AJAX ROUTES (must be inside admin/ )
+     Route::get('/product-price/{id}', [OrderController::class, 'getProductPrice'])
+        ->name('product.price');
+    Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])
+        ->name('supplier.products');
         });
 
-        // Delivery Details Routes
+        // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
+        //     Route::get('list', [OrderController::class, 'list'])->name('list');
+        //     Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
+        //     Route::post('add-payment-ref-code/{id}', [OrderController::class, 'addPaymentReferenceCode'])->name('add-payment-ref-code');
+        // });
+
         Route::group(['prefix' => 'delivery-details', 'as' => 'delivery-details.'], function () {
             Route::get('list', [DeliveryDetailsController::class, 'index'])->name('list');
             Route::get('status/{status}', [DeliveryDetailsController::class, 'status'])->name('status');
             Route::get('view/{id}', [DeliveryDetailsController::class, 'view'])->name('view');
         });
 
-        // Order Routes (singular)
         Route::group(['prefix' => 'order', 'as' => 'order.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
-            Route::get('returned-logs/{order_id}', [OrderController::class, 'returnedLogs'])->name('returned-logs');
             Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
             Route::post('update-shipping/{id}', [OrderController::class, 'updateShipping'])->name('update-shipping');
             Route::post('update-timeSlot', [OrderController::class, 'updateTimeSlot'])->name('update-timeSlot');
             Route::post('update-deliveryDate', [OrderController::class, 'updateDeliveryDate'])->name('update-deliveryDate');
         });
 
-        // Category Routes
         Route::group(['prefix' => 'category', 'as' => 'category.', 'middleware' => ['module:product_management']], function () {
             Route::get('add', [CategoryController::class, 'index'])->name('add');
             Route::get('add-sub-category', [CategoryController::class, 'subIndex'])->name('add-sub-category');
             Route::post('store', [CategoryController::class, 'store'])->name('store');
             Route::get('edit/{id}', [CategoryController::class, 'edit'])->name('edit');
             Route::post('update/{id}', [CategoryController::class, 'update'])->name('update');
+            Route::post('store', [CategoryController::class, 'store'])->name('store');
             Route::get('status/{id}/{status}', [CategoryController::class, 'status'])->name('status');
             Route::delete('delete/{id}', [CategoryController::class, 'delete'])->name('delete');
             Route::post('search', [CategoryController::class, 'search'])->name('search');
             Route::get('priority', [CategoryController::class, 'priority'])->name('priority');
         });
 
-        // Message Routes
         Route::group(['prefix' => 'message', 'as' => 'message.', 'middleware' => ['module:support_management']], function () {
             Route::get('list', [ConversationController::class, 'list'])->name('list');
             Route::post('update-fcm-token', [ConversationController::class, 'updateFcmToken'])->name('update_fcm_token');
@@ -331,16 +289,15 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('store/{user_id}', [ConversationController::class, 'store'])->name('store');
             Route::get('view/{user_id}', [ConversationController::class, 'view'])->name('view');
             Route::get('/sales-chats', [ConversationController::class, 'index'])->name('sales.chats.index');
-            Route::post('/sales-chats/reply', [ConversationController::class, 'reply'])->name('sales.chats.reply');
+            Route::post('/sales-chats/reply', [ConversationController::class, 'reply'])
+                ->name('sales.chats.reply');
         });
 
-        // Reviews Routes
         Route::group(['prefix' => 'reviews', 'as' => 'reviews.', 'middleware' => ['module:user_management']], function () {
             Route::get('list', [ReviewsController::class, 'list'])->name('list');
             Route::get('status/{id}/{status}', [ReviewsController::class, 'status'])->name('status');
         });
 
-        // Coupon Routes
         Route::group(['prefix' => 'coupon', 'as' => 'coupon.', 'middleware' => ['module:promotion_management']], function () {
             Route::get('add-new', [CouponController::class, 'index'])->name('add-new');
             Route::post('store', [CouponController::class, 'store'])->name('store');
@@ -349,9 +306,9 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('status/{id}/{status}', [CouponController::class, 'status'])->name('status');
             Route::delete('delete/{id}', [CouponController::class, 'delete'])->name('delete');
             Route::get('quick-view-details', [CouponController::class, 'details'])->name('quick-view-details');
+
         });
 
-        // Business Settings Routes
         Route::group(['prefix' => 'business-settings', 'as' => 'business-settings.', 'middleware' => ['module:system_management']], function () {
 
             Route::group(['prefix' => 'store', 'as' => 'store.'], function () {
@@ -428,6 +385,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                 Route::post('payment-method-update/{payment_method}', [BusinessSettingsController::class, 'paymentUpdate'])->name('payment-method-update');
                 Route::post('payment-config-update', [BusinessSettingsController::class, 'paymentConfigUpdate'])->name('payment-config-update')->middleware('actch');
 
+
                 Route::group(['prefix' => 'system-setup', 'as' => 'system-setup.'], function () {
                     Route::get('app-setting', [BusinessSettingsController::class, 'appSettingIndex'])->name('app_setting');
                     Route::post('app-setting', [BusinessSettingsController::class, 'appSettingUpdate']);
@@ -484,6 +442,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                         Route::post('delete', [OfflinePaymentMethodController::class, 'delete'])->name('delete');
                     });
                 });
+
             });
 
             Route::group(['prefix' => 'page-setup', 'as' => 'page-setup.'], function () {
@@ -510,6 +469,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
                 Route::get('return-policy', [BusinessSettingsController::class, 'returnPolicy'])->name('return-policy');
                 Route::post('return-policy', [BusinessSettingsController::class, 'returnPolicyUpdate']);
                 Route::get('return-policy/status/{status}', [BusinessSettingsController::class, 'returnPolicyStatus'])->name('return-policy.status');
+
             });
 
             Route::get('currency-add', [BusinessSettingsController::class, 'currencyIndex'])->name('currency-add')->middleware('actch');
@@ -517,9 +477,9 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('currency-update/{id}', [BusinessSettingsController::class, 'currencyEdit'])->name('currency-update')->middleware('actch');
             Route::put('currency-update/{id}', [BusinessSettingsController::class, 'currencyUpdate']);
             Route::delete('currency-delete/{id}', [BusinessSettingsController::class, 'currencyDelete'])->name('currency-delete');
+
         });
 
-        // Report Routes
         Route::group(['prefix' => 'report', 'as' => 'report.', 'middleware' => ['module:report_management']], function () {
             Route::get('order', [ReportController::class, 'order_index'])->name('order');
             Route::get('earning', [ReportController::class, 'earning_index'])->name('earning');
@@ -531,15 +491,14 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('expense-export-pdf', [ReportController::class, 'expenseSummaryPdf'])->name('expense.export.pdf');
         });
 
-        // Analytics Routes
         Route::group(['prefix' => 'analytics', 'as' => 'analytics.', 'middleware' => ['module:report_management']], function () {
             Route::get('keyword-search', [AnalyticController::class, 'getKeywordSearch'])->name('keyword-search');
             Route::get('customer-search', [AnalyticController::class, 'getCustomerSearch'])->name('customer-search');
             Route::get('keyword-export-excel', [AnalyticController::class, 'exportKeywordSearch'])->name('keyword.export.excel');
             Route::get('customer-export-excel', [AnalyticController::class, 'exportCustomerSearch'])->name('customer.export.excel');
+
         });
 
-        // Customer Routes
         Route::group(['prefix' => 'customer', 'as' => 'customer.', 'middleware' => ['module:user_management']], function () {
             Route::get('list', [CustomerController::class, 'list'])->name('list');
             Route::get('view/{user_id}', [CustomerController::class, 'view'])->name('view');
@@ -569,7 +528,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('loyalty-point/report', [LoyaltyPointController::class, 'report'])->name('loyalty-point.report');
         });
 
-        // Offer Routes
         Route::group(['prefix' => 'offer', 'as' => 'offer.'], function () {
             Route::get('flash-index', [OfferController::class, 'flashIndex'])->name('flash.index');
             Route::post('flash-store', [OfferController::class, 'flashStore'])->name('flash.store');
@@ -582,7 +540,6 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('flash/delete-product', [OfferController::class, 'deleteFlashProduct'])->name('flash.delete.product');
         });
 
-        // System Addon Routes
         Route::group(['namespace' => 'System', 'prefix' => 'system-addon', 'as' => 'system-addon.'], function () {
             Route::get('/', [AddonController::class, 'index'])->name('index');
             Route::post('publish', [AddonController::class, 'publish'])->name('publish');
@@ -591,12 +548,11 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::post('delete', [AddonController::class, 'deleteAddon'])->name('delete');
         });
 
-        // Offline Payment Routes
+
         Route::get('verify-offline-payment/quick-view-details', [OfflinePaymentMethodController::class, 'quickViewDetails'])->name('offline-modal-view');
         Route::get('verify-offline-payment/{status}', [OfflinePaymentMethodController::class, 'offlinePaymentList'])->name('verify-offline-payment');
+
     });
 });
-
-// Export Route
 Route::get('/admin/report/sale-report/export', [ReportController::class, 'exportSalesReport'])
     ->name('admin.report.sales.export');

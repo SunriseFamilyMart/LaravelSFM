@@ -435,12 +435,22 @@ class AuthController extends Controller
         $request->validate([
             'store_name' => 'required|string|max:255',
             'customer_name' => 'required|string|max:255',
+            'street_address' => 'nullable|string|max:255',
+            'area' => 'nullable|string|max:150',
+            'city' => 'nullable|string|max:100',
+            'taluk' => 'nullable|string|max:100',
+            'district' => 'nullable|string|max:100',
+            'state' => 'nullable|string|max:100',
+            'pincode' => 'nullable|string|max:10',
             'address' => 'required|string|max:500',
             'phone_number' => 'required|string|max:15',
             'alternate_number' => 'nullable|string|max:15',
             'gst_number' => 'nullable|string|max:20', // ✅ GST field
             'landmark' => 'nullable|string|max:255',
-            'store_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'route_name' => 'required|string|max:255',
+            'latitude'  => 'required|numeric',
+            'longitude' => 'required|numeric',
+            'store_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
         // 📞 Normalize phone numbers
@@ -453,7 +463,7 @@ class AuthController extends Controller
         if ($alternate && !str_starts_with($alternate, '+91')) {
             $alternate = '+91' . ltrim($alternate, '0');
         }
-
+/*
         // 🌍 Latitude & Longitude
         $latitude = null;
         $longitude = null;
@@ -474,14 +484,42 @@ class AuthController extends Controller
                 $longitude = $geoData['results'][0]['geometry']['location']['lng'];
             }
         }
-
+*/
         // 📌 Prepare data
-        $data = $request->all();
+       // $data = $request->all();
+
+            $data = $request->only([
+            'store_name',
+            'customer_name',
+            'street_address',
+            'area',
+            'city',
+            'taluk',
+            'district',
+            'state',
+            'pincode',
+            'address',
+            'phone_number',
+            'alternate_number',
+            'gst_number',
+            'landmark',
+        ]);
+
         $data['phone_number'] = $phone;
         $data['alternate_number'] = $alternate;
-        $data['latitude'] = $latitude;
-        $data['longitude'] = $longitude;
+        $data['latitude'] = $request->latitude;
+        $data['longitude'] = $request->longitude;
         $data['sales_person_id'] = $salesPerson->id;
+        $data['route_name'] = $request->route_name;
+        $data['full_address'] = implode(', ', array_filter([
+            $data['street_address'] ?? null,
+            $data['area'] ?? null,
+            $data['city'] ?? null,
+            $data['taluk'] ?? null,
+            $data['district'] ?? null,
+            $data['state'] ?? 'Karnataka',
+            $data['pincode'] ?? null,
+        ]));
 
         if ($request->hasFile('store_photo')) {
             $data['store_photo'] = $request->file('store_photo')
@@ -490,6 +528,11 @@ class AuthController extends Controller
 
         // 🏪 Save Store
         $store = Store::create($data);
+        \Log::info('STORE LAT LNG', [
+    'lat' => $request->latitude,
+    'lng' => $request->longitude,
+]);
+
 
         return response()->json([
             'success' => true,
@@ -499,94 +542,51 @@ class AuthController extends Controller
     }
 
 
-// public function myStores(Request $request)
-// {
-//     // 🔐 Get token from header
-//     $token = $request->header('Authorization');
-
-//     if (!$token) {
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'Unauthorized. Missing token.'
-//         ], 401);
-//     }
-
-//     $salesPerson = SalesPerson::where('auth_token', $token)->first();
-
-//     if (!$salesPerson) {
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'Unauthorized. Invalid token.'
-//         ], 401);
-//     }
-
-//     // 📌 Fetch stores created by this salesperson
-//     $stores = Store::where('sales_person_id', $salesPerson->id)
-//         ->latest()
-//         ->get();
-
-//     // ➕ Add arrear_amount for each store
-//     foreach ($stores as $store) {
-
-//         $arrear = DB::table('orders as o')
-//             ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
-//             ->where('o.store_id', $store->id)
-//             ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
-//             ->first();
-
-//         $store->arrear_amount = $arrear->arrear_amount ?? 0;
-//     }
-
-//     return response()->json([
-//         'success' => true,
-//         'message' => 'Stores fetched successfully',
-//         'data' => $stores
-//     ]);
-// }
 public function myStores(Request $request)
 {
- $token = $request->header('Authorization');
-
+    // 🔐 Get token from header
+    $token = $request->header('Authorization');
     if (!$token) {
         return response()->json([
             'success' => false,
             'message' => 'Unauthorized. Missing token.'
         ], 401);
     }
-$salesPerson = SalesPerson::where('auth_token', $token)->first();
-      if (!$salesPerson) {
+
+    $salesPerson = SalesPerson::where('auth_token', $token)->first();
+
+    if (!$salesPerson) {
         return response()->json([
             'success' => false,
             'message' => 'Unauthorized. Invalid token.'
         ], 401);
-   }
+    }
 
-    $stores = Store::where('sales_person_id', $salesPerson->id)
-        ->latest()
-        ->get();
+    // ✅ FETCH ALL STORES (no salesman filter)
+   // $stores = Store::latest()->get();
+    $stores = Store::select(
+        'id',
+        'store_name',
+        'customer_name',
+        'address',
+        'full_address', 
+        'landmark',
+        'phone_number',
+        'latitude',
+        'longitude',
+        'sales_person_id',
+        'route_name',
+        'store_photo',
+        'created_at'
+    )->latest()->get();
 
+    // ➕ Add arrear_amount for each store (unchanged)
     foreach ($stores as $store) {
 
         $arrear = DB::table('orders as o')
-            ->leftJoinSub(
-                DB::table('order_payments')
-                    ->select('order_id', DB::raw('SUM(amount) as total_paid'))
-                    ->where('payment_status', 'complete')
-                    ->groupBy('order_id'),
-                'p',
-                function ($join) {
-                    $join->on('o.id', '=', 'p.order_id');
-                }
-            )
+            ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
             ->where('o.store_id', $store->id)
-            ->selectRaw('
-                ROUND(
-                    SUM(o.order_amount + o.total_tax_amount)
-                    -
-                    SUM(COALESCE(p.total_paid, 0)),
-                    2
-                ) AS arrear_amount
-            ')
+            ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
             ->first();
 
         $store->arrear_amount = $arrear->arrear_amount ?? 0;
@@ -596,7 +596,7 @@ $salesPerson = SalesPerson::where('auth_token', $token)->first();
         'success' => true,
         'message' => 'Stores fetched successfully',
         'data' => $stores
-    ], 200);
+    ]);
 }
 
    public function getAllOrdersArrear(Request $request): JsonResponse
@@ -931,7 +931,7 @@ return response()->json([
         $totalOrders = Order::where('sales_person_id', $salesPerson->id)->count();
 
         $orders = Order::where('sales_person_id', $salesPerson->id)
-            ->select('id', 'store_id', 'order_amount','total_tax_amount', 'order_status', 'payment_status', 'created_at', 'delivery_man_id')
+            ->select('id', 'store_id', 'order_amount', 'order_status', 'payment_status', 'created_at', 'delivery_man_id')
             ->with([
                 'orderDetails:id,order_id,product_id,price,quantity,tax_amount,discount_on_product,unit,product_details'
             ])

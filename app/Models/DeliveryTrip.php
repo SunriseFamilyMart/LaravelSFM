@@ -22,17 +22,9 @@ class DeliveryTrip extends Model
         return $this->belongsTo(DeliveryMan::class, 'delivery_man_id');
     }
 
-    public function reassignments()
-    {
-        return $this->hasMany(DeliveryTripReassignment::class, 'delivery_trip_id');
-    }
-
-    /**
-     * NOTE: order_ids is stored as JSON array, so this relation is not used by default.
-     * Keep it as-is to avoid impacting existing code paths.
-     */
     public function orders()
     {
         return $this->hasMany(Order::class, 'id', 'order_ids');
     }
+    
 }

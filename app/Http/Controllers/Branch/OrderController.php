@@ -10,7 +10,6 @@ use App\Model\BusinessSetting;
 use App\Model\DeliveryMan;
 use App\Model\Order;
 use App\Model\OrderDetail;
-use App\Model\OrderEditLog;
 use App\Model\Product;
 use App\Models\DeliveryChargeByArea;
 use App\Models\OfflinePayment;
@@ -293,12 +292,6 @@ class OrderController extends Controller
 
         $order->order_status = $request->order_status;
         $order->save();
-
-        // Auto-create full return logs for 'returned' status (Option A visibility)
-        if ($request->order_status == 'returned') {
-            $this->ensureFullReturnLogs($order);
-        }
-
 
         $message = Helpers::order_status_update_message($request->order_status);
         $customerLanguageCode = $order->is_guest == 0 ? ($order->customer ? $order->customer->language_code : 'en') : ($order->guest ? $order->guest->language_code : 'en');
@@ -818,45 +811,4 @@ class OrderController extends Controller
         Toastr::success(translate('Order delivery area updated successfully.'));
         return back();
     }
-
-
-    /**
-     * If an order is marked returned but has no order_edit_logs,
-     * create FULL RETURN logs (one per order_detail) so Admin can manage data.
-     */
-    protected function ensureFullReturnLogs($order): void
-    {
-        if (!$order) { return; }
-
-        $exists = OrderEditLog::where('order_id', $order->id)->exists();
-        if ($exists) { return; }
-
-        $details = OrderDetail::where('order_id', $order->id)->get();
-        if ($details->isEmpty()) { return; }
-
-        $dmId = $order->delivery_man_id ?? 0;
-
-        $rows = [];
-        $now = now();
-
-        foreach ($details as $d) {
-            $oldQty = (int) $d->quantity;
-            $rows[] = [
-                'order_id' => $order->id,
-                'order_detail_id' => $d->id,
-                'delivery_man_id' => $dmId ?: 0,
-                'reason' => 'Full Return',
-                'photo' => null,
-                'old_quantity' => $oldQty,
-                'new_quantity' => 0,
-                'old_price' => (float) ($d->price * $oldQty),
-                'new_price' => 0,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-
-        DB::table('order_edit_logs')->insert($rows);
-    }
-
 }

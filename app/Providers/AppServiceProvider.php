@@ -28,13 +28,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        // ✅ Ensure global constants (e.g. MANAGEMENT_SECTION, TELEPHONE_CODES) are loaded
-        // even when Laravel config is cached (bootstrap/cache/config.php).
-        // Without this, views/middlewares that reference these constants will crash.
-        if (!defined('MANAGEMENT_SECTION') && file_exists(config_path('constant.php'))) {
-            require_once config_path('constant.php');
-        }
-
         //for system addon
         Config::set('addon_admin_routes',$this->get_addon_admin_routes());
         Config::set('get_payment_publish_status',$this->get_payment_publish_status());

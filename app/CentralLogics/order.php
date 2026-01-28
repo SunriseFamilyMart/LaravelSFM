@@ -7,7 +7,6 @@ use App\Model\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
-
 class OrderLogic
 {
     public static function track_order($order_id)
@@ -16,8 +15,6 @@ class OrderLogic
        $order->offline_payment_information = $order->offline_payment ? json_decode($order->offline_payment->payment_info, true): null;
        return $order;
     }
-    
-
 
     public static function place_order($customer_id, $email, $customer_info, $cart, $payment_method, $discount, $coupon_code = null)
     {

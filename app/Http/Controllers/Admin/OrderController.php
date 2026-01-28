@@ -10,7 +10,6 @@ use App\Model\BusinessSetting;
 use App\Model\DeliveryMan;
 use App\Model\Order;
 use App\Model\OrderDetail;
-use App\Model\OrderEditLog;
 use App\Model\Product;
 use App\Models\OrderPayment;
 
@@ -39,7 +38,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use function App\CentralLogics\translate;
 use Illuminate\Support\Str;
 use App\Models\DeliveryTrip;
-
 
 class OrderController extends Controller
 {
@@ -75,10 +73,6 @@ class OrderController extends Controller
     $startDate = $request['start_date'] ?? null;
     $endDate = $request['end_date'] ?? null;
 
-
-    // Returned sub-filter (read-only): all | partial | full
-    $returnType = $request->get('return_type', 'all');
-
     // Mark unchecked orders as checked
     $this->order->where(['checked' => 0])->update(['checked' => 1]);
 
@@ -109,33 +103,8 @@ class OrderController extends Controller
 
     // Order status filter
     if ($status != 'all') {
-        if ($status === 'returned') {
-            // Include: (A) orders marked as returned AND (B) orders that have item-wise return/edit logs
-            $logsOrderIds = OrderEditLog::query()->select('order_id')->distinct();
-            $query->where(function ($q) use ($logsOrderIds) {
-                $q->where('order_status', 'returned')
-                  ->orWhereIn('id', $logsOrderIds);
-            });
-        } else {
-            $query->where(['order_status' => $status]);
-        }
+        $query->where(['order_status' => $status]);
     }
-
-    // Returned partial/full filtering (based on order_edit_logs)
-    if ($status === 'returned' && in_array($returnType, ['partial', 'full'])) {
-        $partialOrderIds = OrderEditLog::query()
-            ->select('order_id')
-            ->where('new_quantity', '>', 0)
-            ->distinct();
-
-        if ($returnType === 'partial') {
-            $query->whereIn('id', $partialOrderIds);
-        } else {
-            // Option A: Full return includes returned orders WITHOUT logs (treated as full)
-            $query->whereNotIn('id', $partialOrderIds);
-        }
-    }
-
 
     // Search filter
     if ($request->has('search')) {
@@ -157,7 +126,6 @@ class OrderController extends Controller
         'payment_method' => $paymentMethod,
         'start_date' => $startDate,
         'end_date' => $endDate,
-        'return_type' => $returnType,
     ]);
 
     $orders = $query->notPos()
@@ -165,111 +133,13 @@ class OrderController extends Controller
                     ->paginate(Helpers::getPagination())
                     ->appends($queryParam);
 
-    // Returned sub-tab counts (Option A: orders with no logs are treated as FULL return)
-    $returnedTypeCounts = ['all' => 0, 'partial' => 0, 'full' => 0];
-    $returnMeta = [];
-
-    if ($status === 'returned') {
-        // Base returned query with the same filters (excluding search + return_type)
-        $baseReturned = $this->order->notPos()
-            ->when(($branchId && $branchId != 'all'), function ($q) use ($branchId) { return $q->where('branch_id', $branchId); })
-            ->when($startDate && $endDate, function ($q) use ($startDate, $endDate) { return $q->whereDate('created_at', '>=', $startDate)->whereDate('created_at', '<=', $endDate); })
-            ->when($deliveryManId && $deliveryManId != 'all', function ($q) use ($deliveryManId) { return $q->where('delivery_man_id', $deliveryManId); })
-            ->when($paymentMethod && $paymentMethod != 'all', function ($q) use ($paymentMethod) {
-                return $q->whereHas('payments', function ($p) use ($paymentMethod) {
-                    $p->where('payment_method', $paymentMethod);
-                });
-            })
-            ->where('order_status', 'returned');
-
-        $returnedTypeCounts['all'] = (clone $baseReturned)->count();
-
-        $partialOrderIds = OrderEditLog::query()
-            ->select('order_id')
-            ->where('new_quantity', '>', 0)
-            ->distinct();
-
-        $returnedTypeCounts['partial'] = (clone $baseReturned)->whereIn('id', $partialOrderIds)->count();
-        $returnedTypeCounts['full'] = (clone $baseReturned)->whereNotIn('id', $partialOrderIds)->count();
-
-        // Return summary for only current page orders (fast)
-        $orderIds = $orders->pluck('id')->toArray();
-
-        if (!empty($orderIds)) {
-            $logsByOrder = OrderEditLog::query()
-                ->whereIn('order_id', $orderIds)
-                ->orderBy('id')
-                ->get()
-                ->groupBy('order_id');
-
-            // order_details fallback counts for "no logs" orders
-            $detailsAgg = DB::table('order_details')
-                ->select('order_id', DB::raw('COUNT(*) as items_count'), DB::raw('SUM(quantity) as total_qty'))
-                ->whereIn('order_id', $orderIds)
-                ->groupBy('order_id')
-                ->get()
-                ->keyBy('order_id');
-
-            foreach ($orderIds as $oid) {
-                $logs = $logsByOrder->get($oid, collect());
-
-                if ($logs->isEmpty()) {
-                    $itemsCount = (int) optional($detailsAgg->get($oid))->items_count;
-                    $totalQty = (int) optional($detailsAgg->get($oid))->total_qty;
-
-                    $returnMeta[$oid] = [
-                        'type' => 'full',
-                        'items_count' => $itemsCount,
-                        'total_return_qty' => $totalQty,
-                        'has_logs' => false,
-                    ];
-                    continue;
-                }
-
-                $isPartial = $logs->contains(function ($l) { return (int)$l->new_quantity > 0; });
-
-                // item-wise: (first old_quantity - last new_quantity)
-                $byItem = $logs->groupBy('order_detail_id');
-                $itemsCount = $byItem->count();
-                $totalReturnQty = 0;
-
-                foreach ($byItem as $gid => $group) {
-                    $sorted = $group->sortBy('id')->values();
-                    $firstOld = (int) optional($sorted->first())->old_quantity;
-                    $lastNew = (int) optional($sorted->last())->new_quantity;
-                    $totalReturnQty += max(0, $firstOld - $lastNew);
-                }
-
-                $returnMeta[$oid] = [
-                    'type' => $isPartial ? 'partial' : 'full',
-                    'items_count' => (int)$itemsCount,
-                    'total_return_qty' => (int)$totalReturnQty,
-                    'has_logs' => true,
-                ];
-            }
-        }
-    }
-
-
     // Count orders by status (keeping old functionality)
     $countData = [];
     $orderStatuses = ['pending', 'confirmed', 'processing', 'out_for_delivery', 'delivered', 'canceled', 'returned', 'failed'];
 
     foreach ($orderStatuses as $orderStatus) {
-        $q = $this->order->notPos();
-
-        if ($orderStatus === 'returned') {
-            // Returned count should include: orders with status=returned OR orders with item-wise return/edit logs
-            $logsOrderIds = OrderEditLog::query()->select('order_id')->distinct();
-            $q->where(function ($x) use ($logsOrderIds) {
-                $x->where('order_status', 'returned')
-                  ->orWhereIn('id', $logsOrderIds);
-            });
-        } else {
-            $q->where('order_status', $orderStatus);
-        }
-
-        $countData[$orderStatus] = $q
+        $countData[$orderStatus] = $this->order->notPos()
+            ->where('order_status', $orderStatus)
             ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
                 return $query->where('branch_id', $branchId);
             })
@@ -280,108 +150,11 @@ class OrderController extends Controller
             ->count();
     }
 
-return view('admin-views.order.list', compact(
+    return view('admin-views.order.list', compact(
         'orders', 'status', 'search', 'branches', 'branchId', 'deliveryManId',
-        'paymentMethod', 'startDate', 'endDate', 'countData','deliveryMen', 'returnedTypeCounts', 'returnMeta', 'returnType'
+        'paymentMethod', 'startDate', 'endDate', 'countData','deliveryMen'
     ));
 }
-
-    /**
-     * Read-only: return item-wise partial return summary + full edit logs for an order.
-     * Used by Admin Returned Orders list page (modal).
-     */
-    public function returnedLogs($order_id): JsonResponse
-    {
-        // Fetch logs first
-        $logs = OrderEditLog::with(['deliveryMan', 'orderDetail.product'])
-            ->where('order_id', $order_id)
-            ->orderBy('id')
-            ->get();
-
-        // Option A: if order is returned but has no logs, treat as FULL return and build from order_details
-        if ($logs->isEmpty()) {
-            $details = OrderDetail::with('product')
-                ->where('order_id', $order_id)
-                ->get();
-
-            $items = $details->map(function ($d) {
-                return [
-                    'order_detail_id' => $d->id,
-                    'product_name' => optional($d->product)->name ?? (json_decode($d->product_details, true)['name'] ?? ('Item #' . $d->product_id)),
-                    'old_quantity' => (int) $d->quantity,
-                    'new_quantity' => 0,
-                    'returned_qty' => (int) $d->quantity,
-                    'reason' => translate('Returned (no edit logs)'),
-                    'photo' => null,
-                    'last_updated_at' => null,
-                    'history' => [],
-                ];
-            })->values();
-
-            return response()->json([
-                'order_id' => (int) $order_id,
-                'type' => 'full',
-                'summary' => [
-                    'items_count' => $items->count(),
-                    'total_return_qty' => (int) $items->sum('returned_qty'),
-                ],
-                'items' => $items,
-            ]);
-        }
-
-        $isPartial = $logs->contains(function ($l) { return (int)$l->new_quantity > 0; });
-
-        $items = $logs->groupBy('order_detail_id')->map(function ($group) {
-            $sorted = $group->sortBy('id')->values();
-
-            $first = $sorted->first();
-            $last = $sorted->last();
-
-            $firstOld = (int) optional($first)->old_quantity;
-            $lastNew = (int) optional($last)->new_quantity;
-
-            $returnedQty = max(0, $firstOld - $lastNew);
-
-            $od = optional($last)->orderDetail;
-            $pName = optional(optional($od)->product)->name;
-            if (!$pName && $od && $od->product_details) {
-                $pName = json_decode($od->product_details, true)['name'] ?? null;
-            }
-
-            return [
-                'order_detail_id' => (int) $group->first()->order_detail_id,
-                'product_name' => $pName ?? ('Item #' . (optional($od)->product_id ?? '')),
-                'old_quantity' => $firstOld,
-                'new_quantity' => $lastNew,
-                'returned_qty' => $returnedQty,
-                'reason' => (string) optional($last)->reason,
-                'photo' => optional($last)->photo,
-                'last_updated_at' => optional($last)->updated_at ? optional($last)->updated_at->toDateTimeString() : null,
-                'history' => $sorted->map(function ($l) {
-                    return [
-                        'id' => (int) $l->id,
-                        'old_quantity' => (int) $l->old_quantity,
-                        'new_quantity' => (int) $l->new_quantity,
-                        'reason' => (string) $l->reason,
-                        'photo' => $l->photo,
-                        'delivery_man' => $l->deliveryMan ? trim($l->deliveryMan->f_name.' '.$l->deliveryMan->l_name) : null,
-                        'created_at' => $l->created_at ? $l->created_at->toDateTimeString() : null,
-                    ];
-                })->values(),
-            ];
-        })->values();
-
-        return response()->json([
-            'order_id' => (int) $order_id,
-            'type' => $isPartial ? 'partial' : 'full',
-            'summary' => [
-                'items_count' => $items->count(),
-                'total_return_qty' => (int) $items->sum('returned_qty'),
-            ],
-            'items' => $items,
-        ]);
-    }
-
 
 
 public function orderManagement(Request $request)
@@ -389,32 +162,39 @@ public function orderManagement(Request $request)
     $supplierId = $request->supplier;
     $productId  = $request->product;
     $status     = $request->status;
-    $limit      = $request->get('limit', 10);
 
-    // ---------------- ORDERS ----------------
+    $limit = $request->get('limit', 10);
+
+    // Fetch orders with related details + only completed payments
     $orders = Order::with([
-            'store',
             'details.product.supplier',
-            'details.editLogs',
             'payments' => function ($q) {
-                $q->where('payment_status', 'complete');
+                $q->where('payment_status', 'complete'); // ONLY completed payments
             }
         ])
         ->when($status, fn ($q) => $q->where('order_status', $status))
         ->whereHas('details', function ($q) use ($productId, $supplierId) {
-            if ($productId) $q->where('product_id', $productId);
+            if ($productId) {
+                $q->where('product_id', $productId);
+            }
             if ($supplierId) {
-                $q->whereHas('product', fn($p) => $p->where('supplier_id', $supplierId));
+                $q->whereHas('product', function ($p) use ($supplierId) {
+                    $p->where('supplier_id', $supplierId);
+                });
             }
         })
         ->latest()
         ->paginate($limit);
 
+    /* ================= SUMMARY ================= */
     $orderCollection = collect($orders->items());
 
-    // ---------------- PAGE LEVEL SUMMARY ----------------
-    $totalPaid = $orderCollection->sum(fn($order) => $order->payments->sum('amount'));
-    $totalPurchase = $orderCollection->sum(fn($order) => $order->order_amount + ($order->total_tax_amount ?? 0));
+    // Calculate only COMPLETE payment amounts
+    $totalPaid = $orderCollection->sum(function ($order) {
+        return $order->payments->where('payment_status', 'complete')->sum('amount');
+    });
+
+    $totalPurchase = $orderCollection->sum('order_amount');
 
     $summary = [
         'total_orders'   => $orderCollection->count(),
@@ -422,66 +202,24 @@ public function orderManagement(Request $request)
         'in_progress'    => $orderCollection->where('order_status', 'processing')->count(),
         'delayed'        => $orderCollection->where('order_status', 'failed')->count(),
         'cancelled'      => $orderCollection->where('order_status', 'canceled')->count(),
+
         'total_purchase' => $totalPurchase,
         'total_paid'     => $totalPaid,
         'outstanding'    => $totalPurchase - $totalPaid,
     ];
 
-    // ---------------- STORE WISE TOTALS ----------------
-    $storeTotals = DB::table('orders as o')
-        ->leftJoin('order_payments as op', function ($join) {
-            $join->on('o.id', '=', 'op.order_id')
-                 ->where('op.payment_status', 'complete');
-        })
-        ->when($status, fn ($q) => $q->where('o.order_status', $status))
-        ->when($productId || $supplierId, function ($q) use ($productId, $supplierId) {
-            $q->whereExists(function ($sub) use ($productId, $supplierId) {
-                $sub->select(DB::raw(1))
-                    ->from('order_details as d')
-                    ->join('products as pr', 'pr.id', '=', 'd.product_id')
-                    ->whereColumn('d.order_id', 'o.id');
-
-                if ($productId) $sub->where('d.product_id', $productId);
-                if ($supplierId) $sub->where('pr.supplier_id', $supplierId);
-            });
-        })
-        ->whereNotNull('o.store_id')
-        ->groupBy('o.store_id')
-        ->select(
-            'o.store_id',
-            DB::raw('SUM(o.order_amount + COALESCE(o.total_tax_amount,0)) AS store_total_order'),
-            DB::raw('SUM(COALESCE(op.amount,0)) AS store_total_paid'),
-            DB::raw('SUM((o.order_amount + COALESCE(o.total_tax_amount,0)) - COALESCE(op.amount,0)) AS store_arrear')
-        )
-        ->get()
-        ->keyBy('store_id');
-
-    // ---------------- ORDER DETAIL QUANTITIES ----------------
+    /* Add first detail's invoice & dates */
     foreach ($orders as $order) {
-        foreach ($order->details as $detail) {
-            $lastEdit = $detail->editLogs->sortByDesc('id')->first();
-
-            if ($lastEdit) {
-                $detail->current_qty = $lastEdit->new_quantity;
-                $detail->return_qty  = max(0, $lastEdit->old_quantity - $lastEdit->new_quantity);
-            } else {
-                $detail->current_qty = $detail->quantity;
-                $detail->return_qty  = 0;
-            }
-        }
-
-        // Order-level info
-        $order->first_invoice_number = $order->details->first()?->invoice_number;
-        $order->first_expected_date  = $order->details->first()?->expected_date;
-        $order->first_order_user     = $order->details->first()?->order_user;
+        $order->first_invoice_number = $order->details->first()?->invoice_number ?? null;
+        $order->first_expected_date = $order->details->first()?->expected_date ?? null;
+        $order->first_order_user = $order->details->first()?->order_user ?? null;
     }
 
     return view('admin-views.order.ordermanagement', [
-        'orders'      => $orders,
-        'suppliers'   => Supplier::all(),
-        'products'    => Product::all(),
-        'summary'     => $summary,
-        'storeTotals' => $storeTotals,
+        'orders'    => $orders,
+        'suppliers' => Supplier::all(),
+        'products'  => Product::all(),
+        'summary'   => $summary
     ]);
 }
 public function updateOrder(Request $request, $id)
@@ -495,77 +233,30 @@ public function updateOrder(Request $request, $id)
         'payment_status'  => 'nullable|string|in:pending,complete,failed',
     ]);
 
-    $order = Order::with('payments', 'orderDetails', 'store')->findOrFail($id);
-    $orderTotal = (float) $order->order_amount;
-    $incomingPaid = $request->paid_amount ?? 0;
-    $storeId = $order->store_id;
+    $order = Order::with('payments', 'orderDetails')->findOrFail($id);
 
-    // -------------------- UPDATE ORDER STATUS --------------------
+    $orderTotal = (float) $order->order_amount;
+
+    $alreadyPaid = OrderPayment::where('order_id', $order->id)
+        ->where('payment_status', 'complete')
+        ->sum('amount');
+
+    if ($request->paid_amount > 0) {
+        $remainingDue = $orderTotal - $alreadyPaid;
+
+        if ($request->paid_amount > $remainingDue) {
+            return back()->withErrors([
+                'paid_amount' => "You cannot pay more than remaining due: ₹"
+                    . number_format($remainingDue, 2)
+            ]);
+        }
+    }
+
+    // Update Order Status
     $order->order_status = $request->order_status;
     $order->save();
 
-    // -------------------- HANDLE REJECTED OR RETURNED --------------------
-    if (in_array(strtolower($request->order_status), ['rejected', 'returned'])) {
-        // Reset order amounts
-        $order->order_amount = 0;
-        $order->total_tax_amount = 0;
-        $order->save();
-
-        // Reset all order detail prices
-        foreach ($order->orderDetails as $detail) {
-            $detail->price = 0;
-            $detail->tax_amount = 0;
-            $detail->save();
-        }
-
-        // Mark existing payments as failed
-        foreach ($order->payments as $payment) {
-            $payment->payment_status = 'failed';
-            $payment->save();
-        }
-
-        // Skip normal payment logic
-        return back()->with('success', "Order {$order->id} has been {$request->order_status}.");
-    }
-
-    // -------------------- EXISTING PAYMENT LOGIC --------------------
-    if ($incomingPaid > 0) {
-        if ($storeId) {
-            $storeOrders = Order::where('store_id', $storeId)->get();
-            $storeTotalAmount = 0;
-            $storeTotalPaid   = 0;
-
-            foreach ($storeOrders as $sOrder) {
-                $sTotal = (float) $sOrder->order_amount;
-                $sPaid  = OrderPayment::where('order_id', $sOrder->id)
-                            ->where('payment_status', 'complete')
-                            ->sum('amount');
-                $storeTotalAmount += $sTotal;
-                $storeTotalPaid   += $sPaid;
-            }
-
-            $storeArrear = round($storeTotalAmount - $storeTotalPaid, 2);
-
-            if ($incomingPaid > $storeArrear) {
-                return back()->withErrors([
-                    'paid_amount' => "Payment exceeds store arrear amount: ₹" . number_format($storeArrear,2)
-                ]);
-            }
-        } else {
-            $alreadyPaid = OrderPayment::where('order_id', $order->id)
-                            ->where('payment_status', 'complete')
-                            ->sum('amount');
-            $orderArrear = $orderTotal - $alreadyPaid;
-
-            if ($incomingPaid > $orderArrear) {
-                return back()->withErrors([
-                    'paid_amount' => "Payment exceeds remaining due for this order: ₹" . number_format($orderArrear,2)
-                ]);
-            }
-        }
-    }
-
-    // -------------------- UPDATE ORDER DETAILS --------------------
+    // Update order_details
     foreach ($order->orderDetails as $detail) {
         if ($request->filled('invoice_number')) {
             $detail->invoice_number = $request->invoice_number;
@@ -576,66 +267,23 @@ public function updateOrder(Request $request, $id)
         $detail->save();
     }
 
-    // -------------------- ADD PAYMENT --------------------
-    if ($incomingPaid > 0) {
-        // Apply to current order
-        $alreadyPaid = OrderPayment::where('order_id', $order->id)
-            ->where('payment_status', 'complete')
-            ->sum('amount');
-        $currentOrderArrear = $orderTotal - $alreadyPaid;
-        $applyToCurrent = min($incomingPaid, $currentOrderArrear);
-
-        if ($applyToCurrent > 0) {
-            $order->payments()->create([
-                'amount'         => $applyToCurrent,
-                'payment_method' => $request->payment_method ?? 'manual',
-                'payment_status' => $request->payment_status ?? 'complete',
-                'payment_date'   => now(),
-            ]);
-            $incomingPaid -= $applyToCurrent;
-        }
-
-        // Apply remaining to other store orders
-        if ($incomingPaid > 0 && $storeId) {
-            $otherOrders = Order::where('store_id', $storeId)
-                ->where('id', '!=', $order->id)
-                ->orderBy('id')
-                ->get();
-
-            foreach ($otherOrders as $o) {
-                if ($incomingPaid <= 0) break;
-
-                $oTotal = (float) $o->order_amount;
-                $oPaid  = OrderPayment::where('order_id', $o->id)
-                            ->where('payment_status', 'complete')
-                            ->sum('amount');
-
-                $oArrear = $oTotal - $oPaid;
-                if ($oArrear <= 0) continue;
-
-                $pay = min($incomingPaid, $oArrear);
-
-                $o->payments()->create([
-                    'amount'         => $pay,
-                    'payment_method' => $request->payment_method ?? 'manual',
-                    'payment_status' => $request->payment_status ?? 'complete',
-                    'payment_date'   => now(),
-                ]);
-
-                $incomingPaid -= $pay;
-            }
-        }
+    // Add a payment if entered
+    if ($request->paid_amount > 0) {
+        $order->payments()->create([
+            'amount'          => $request->paid_amount,
+            'payment_method'  => $request->payment_method ?? 'manual',
+            'payment_date'    => now(),
+            'payment_status'  => $request->payment_status ?? 'pending',
+        ]);
     }
 
-    // -------------------- UPDATE PAYMENT STATUS PER ORDER --------------------
-    $allStoreOrders = $storeId ? Order::where('store_id', $storeId)->get() : collect([$order]);
-    foreach ($allStoreOrders as $o) {
-        $totalPaid = OrderPayment::where('order_id', $o->id)
-            ->where('payment_status', 'complete')
-            ->sum('amount');
-        $o->payment_status = $totalPaid >= $o->order_amount ? 'Paid' : 'Unpaid';
-        $o->save();
-    }
+    // Recalculate total paid
+    $totalPaid = OrderPayment::where('order_id', $order->id)
+        ->where('payment_status', 'complete')
+        ->sum('amount');
+
+    $order->payment_status = $totalPaid >= $orderTotal ? 'Paid' : 'Unpaid';
+    $order->save();
 
     return back()->with('success', 'Order updated successfully.');
 }
@@ -646,14 +294,7 @@ public function createOrder()
 {
     return view('admin-views.order.create', [
         'suppliers' => Supplier::all(),
-        'products' => Product::select(
-    'id',
-    'name',
-    'price',
-    'tax',
-    'tax_type'
-)->get()
-
+        'products'  => Product::select('id','name','price')->get()
 
     ]);
 }
@@ -685,10 +326,9 @@ public function storeOrder(Request $request)
         'order_user' => 'nullable|string|max:255',
     ]);
 
-    // ---------------- CREATE ORDER ----------------
+    /** CREATE ORDER */
     $order = Order::create([
         'order_amount' => 0,
-        'total_tax_amount' => 0,
         'payment_status' => 'unpaid',
         'order_status' => $request->order_status,
         'payment_method' => $request->payment_mode,
@@ -699,124 +339,94 @@ public function storeOrder(Request $request)
         'order_note' => $request->comment,
     ]);
 
-    $subTotal = 0;
-    $totalTax = 0;
+    $total = 0;
 
-    // ---------------- ORDER DETAILS ----------------
+    /** ORDER DETAILS */
     foreach ($request->products as $item) {
+        $product = Product::find($item['product_id']);
+        $lineTotal = $item['price'] * $item['qty'];
+        $total += $lineTotal;
 
-        $product = Product::findOrFail($item['product_id']);
-
-        // Get the actual price (use item price if provided, otherwise product price)
-        $actualPrice = ($item['price'] ?? 0) > 0 ? $item['price'] : $product->price;
-
-        // Sub total
-        $lineTotal = $actualPrice * $item['qty'];
-
-        // ---------------- TAX CALCULATION ----------------
-        $taxAmount = 0;
-
-        if ($product->tax > 0) {
-            if ($product->tax_type === 'percent') {
-                $taxAmount = ($lineTotal * $product->tax) / 100;
-            } else {
-                $taxAmount = $product->tax * $item['qty'];
-            }
-        }
-
-        $subTotal += $lineTotal;
-        $totalTax += $taxAmount;
-
-        // Snapshot of product
         $productDetails = [
             "id" => $product->id,
             "name" => $product->name,
-            "price" => $actualPrice, // Store the actual price used
+            "description" => $product->description,
+            "image" => $product->image,
+            "price" => $product->price,
+            "variations" => $product->variations,
             "tax" => $product->tax,
+            "status" => $product->status,
+            "attributes" => $product->attributes,
+            "category_ids" => $product->category_ids,
+            "choice_options" => $product->choice_options,
+            "discount" => $product->discount,
+            "discount_type" => $product->discount_type,
             "tax_type" => $product->tax_type,
             "unit" => $product->unit,
+            "total_stock" => $product->total_stock,
+            "capacity" => $product->capacity,
+            "weight" => $product->weight,
         ];
 
-        // Save order details
         OrderDetail::create([
             'order_id' => $order->id,
             'product_id' => $product->id,
-            'order_user' => $request->order_user,
-            'price' => $actualPrice, // Use the calculated actual price
+            'price' => $item['price'],
             'quantity' => $item['qty'],
-
-            // ✅ STORE PRODUCT TAX HERE
-            'tax_amount' => round($taxAmount, 2),
-
+            'tax_amount' => 0,
             'discount_on_product' => 0,
             'discount_type' => 'amount',
             'unit' => $product->unit,
             'delivery_date' => $request->delivery_date,
             'expected_date' => $request->expected_date,
             'invoice_number' => $request->invoice_no,
-            'vat_status' => 'excluded',
+            'vat_status' => "excluded",
             'variation' => json_encode([]),
-            'product_details' => json_encode($productDetails),
+            'product_details' => $productDetails,
+            'order_user' => $request->order_user,
         ]);
     }
 
-    // ---------------- UPDATE ORDER TOTAL ----------------
-    $grandTotal = $subTotal + $totalTax;
+    /** UPDATE ORDER TOTAL */
+    $order->order_amount = $total;
+    $order->save();
 
-    $order->update([
-        'order_amount' => $grandTotal,
-        'total_tax_amount' => $totalTax
-    ]);
-
-    // ---------------- REJECT / RETURN ----------------
-    if (in_array(strtolower($request->order_status), ['rejected', 'returned'])) {
-
-        $order->update([
-            'order_amount' => 0,
-            'total_tax_amount' => 0
-        ]);
-
-        OrderDetail::where('order_id', $order->id)
-            ->update(['price' => 0, 'tax_amount' => 0]);
-
-        OrderPayment::where('order_id', $order->id)
-            ->update(['payment_status' => 'failed']);
-
-        return redirect()->route('admin.orders.ordermanagement')
-            ->with('success', "Order {$order->id} has been {$request->order_status}");
-    }
-
-    // ---------------- PAYMENT ----------------
+    /** ---------------- PAYMENT LOGIC ---------------- */
     $paid = $request->paid ?? 0;
 
+    // Prevent overpayment
     $totalPaidSoFar = OrderPayment::where('order_id', $order->id)->sum('amount');
-
-    // ✅ IMPORTANT: validate against GRAND TOTAL
-    if (($totalPaidSoFar + $paid) > $grandTotal) {
+    if (($totalPaidSoFar + $paid) > $total) {
         return back()->withErrors([
-            'paid' => "Paid amount cannot exceed ₹" . number_format($grandTotal, 2)
+            'paid' => "Total paid amount cannot exceed order total (₹" . number_format($total, 2) . ")"
         ])->withInput();
     }
 
+    // Payment status complete if paid > 0
     $paymentStatus = ($paid > 0) ? 'complete' : 'incomplete';
 
+    /** STORE PAYMENT */
     OrderPayment::create([
         'order_id' => $order->id,
         'payment_method' => $request->payment_mode,
-        'amount' => $paid,
-        'first_payment' => $paid,
+        'amount' => $paid, // Only this transaction amount
+        'first_payment' => $paid, // optional, can remove if you don't need
+        'second_payment' => 0,    // optional
+        'first_payment_date' => now(),
+        'second_payment_date' => null,
         'payment_status' => $paymentStatus,
         'payment_date' => now(),
     ]);
 
+    /** UPDATE ORDER PAYMENT STATUS */
     $totalPaid = OrderPayment::where('order_id', $order->id)->sum('amount');
-
-    $order->payment_status = ($totalPaid >= $grandTotal) ? 'complete' : 'partial';
+    $order->payment_status = ($totalPaid >= $total) ? 'complete' : 'partial';
     $order->save();
 
     return redirect()->route('admin.orders.ordermanagement')
         ->with('success', 'Order created successfully.');
 }
+
 
     /**
      * @param $id
@@ -827,18 +437,10 @@ public function storeOrder(Request $request)
         $order = $this->order
             ->with([
                 'details',
-                'details.product', // ✅ Load actual product for correct price
-                'details.editLogs', // ✅ Load edit logs for each detail
-                'customer',
-                'branch',
-                'delivery_man',
-                'store',
-                'payments',
                 'offline_payment',
                 'editLogs', // ✅ fetch edit logs
                 'editLogs.deliveryMan', // optional to show DM name
-                'editLogs.orderDetail',
-                'editLogs.orderDetail.product'
+                'editLogs.orderDetail'
             ])
             ->where(['id' => $id])
             ->first();
@@ -1028,12 +630,6 @@ public function storeOrder(Request $request)
 
         $order->order_status = $request->order_status;
         $order->save();
-
-        // Auto-create full return logs for 'returned' status (Option A visibility)
-        if ($request->order_status == 'returned') {
-            $this->ensureFullReturnLogs($order);
-        }
-
 
         $message = Helpers::order_status_update_message($request->order_status);
         $languageCode = $order->is_guest == 0 ? ($order->customer ? $order->customer->language_code : 'en') : ($order->guest ? $order->guest->language_code : 'en');
@@ -1272,18 +868,7 @@ public function storeOrder(Request $request)
      */
     public function generateInvoice($id): View|Factory|Application
     {
-        $order = $this->order->with([
-            'details', 
-            'details.product',
-            'details.editLogs',
-            'customer',
-            'branch',
-            'delivery_man',
-            'payments',
-            'editLogs',
-            'editLogs.orderDetail',
-            'editLogs.deliveryMan'
-        ])->where('id', $id)->first();
+        $order = $this->order->where('id', $id)->first();
         $footer_text = $this->business_setting->where(['key' => 'footer_text'])->first();
         return view('admin-views.order.invoice', compact('order', 'footer_text'));
     }
@@ -1528,150 +1113,4 @@ public function storeOrder(Request $request)
         Toastr::success(translate('Order delivery area updated successfully.'));
         return back();
     }
-
-
-    /**
-     * If an order is marked returned but has no order_edit_logs,
-     * create FULL RETURN logs (one per order_detail) so Admin can manage data.
-     */
-    protected function ensureFullReturnLogs($order): void
-    {
-        if (!$order) { return; }
-
-        $exists = OrderEditLog::where('order_id', $order->id)->exists();
-        if ($exists) { return; }
-
-        $details = OrderDetail::where('order_id', $order->id)->get();
-        if ($details->isEmpty()) { return; }
-
-        $dmId = $order->delivery_man_id ?? 0;
-
-        $rows = [];
-        $now = now();
-
-        foreach ($details as $d) {
-            $oldQty = (int) $d->quantity;
-            $rows[] = [
-                'order_id' => $order->id,
-                'order_detail_id' => $d->id,
-                'delivery_man_id' => $dmId ?: 0,
-                'reason' => 'Full Return',
-                'photo' => null,
-                'old_quantity' => $oldQty,
-                'new_quantity' => 0,
-                'old_price' => (float) ($d->price * $oldQty),
-                'new_price' => 0,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-
-        DB::table('order_edit_logs')->insert($rows);
-    }
-
-    /**
-     * Adjust order item quantity/price
-     *
-     * @param Request $request
-     * @return RedirectResponse
-     */
-    public function adjustItem(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'order_id' => 'required|exists:orders,id',
-            'order_detail_id' => 'required|exists:order_details,id',
-            'adjust_type' => 'required|in:quantity,return',
-            'reason' => 'required|string|max:255',
-            'new_quantity' => 'required_if:adjust_type,quantity|integer|min:0',
-            'return_quantity' => 'required_if:adjust_type,return|integer|min:1',
-            'photo' => 'nullable|image|max:2048',
-            'notes' => 'nullable|string|max:500',
-        ]);
-
-        try {
-            DB::beginTransaction();
-
-            $order = $this->order->findOrFail($request->order_id);
-            $orderDetail = $this->order_detail->findOrFail($request->order_detail_id);
-
-            $oldQty = (int) $orderDetail->quantity;
-            $unitPrice = (float) $orderDetail->price;
-
-            // Calculate new quantity based on adjustment type
-            if ($request->adjust_type === 'return') {
-                $returnQty = min((int) $request->return_quantity, $oldQty);
-                $newQty = max(0, $oldQty - $returnQty);
-            } else {
-                $newQty = (int) $request->new_quantity;
-            }
-
-            $oldPrice = $unitPrice * $oldQty;
-            $newPrice = $unitPrice * $newQty;
-            $priceDiff = $newPrice - $oldPrice;
-
-            // Handle photo upload
-            $photoPath = null;
-            if ($request->hasFile('photo')) {
-                $photoPath = $request->file('photo')->store('order_edit_photos', 'public');
-            }
-
-            // Determine action type
-            $action = OrderEditLog::determineAction($oldQty, $newQty, $request->reason);
-            $returnType = OrderEditLog::determineReturnType($oldQty, $newQty);
-
-            // Get current admin info
-            $admin = auth('admin')->user();
-
-            // Create edit log
-            OrderEditLog::create([
-                'order_id' => $order->id,
-                'order_detail_id' => $orderDetail->id,
-                'delivery_man_id' => $order->delivery_man_id ?? 0,
-                'action' => $action,
-                'edited_by_type' => OrderEditLog::EDITED_BY_ADMIN,
-                'edited_by_id' => $admin ? $admin->id : null,
-                'reason' => $request->reason,
-                'old_quantity' => $oldQty,
-                'new_quantity' => $newQty,
-                'old_price' => $oldPrice,
-                'new_price' => $newPrice,
-                'unit_price' => $unitPrice,
-                'discount_per_unit' => $orderDetail->discount ?? 0,
-                'tax_per_unit' => $orderDetail->tax_amount ?? 0,
-                'price_difference' => $priceDiff,
-                'quantity_difference' => $newQty - $oldQty,
-                'return_type' => $returnType,
-                'photo' => $photoPath,
-                'notes' => $request->notes,
-                'order_amount_before' => $order->order_amount,
-                'order_amount_after' => $order->order_amount + $priceDiff,
-            ]);
-
-            // Update order detail quantity
-            $orderDetail->quantity = $newQty;
-            $orderDetail->save();
-
-            // Update order amount
-            $order->order_amount = $order->order_amount + $priceDiff;
-            
-            // If all items are returned, mark order as returned
-            $allItemsReturned = $order->details()->sum('quantity') == 0;
-            if ($allItemsReturned) {
-                $order->order_status = 'returned';
-            }
-            
-            $order->save();
-
-            DB::commit();
-
-            Toastr::success(translate('Order item adjusted successfully.'));
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Toastr::error(translate('Failed to adjust order item: ') . $e->getMessage());
-        }
-
-        return back();
-    }
-
 }

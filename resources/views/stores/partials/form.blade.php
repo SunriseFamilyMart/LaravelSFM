@@ -154,4 +154,4 @@
 </script>
 
 {{-- Google Maps JS API with Places library --}}
-<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCRI5ljDv-LzQWCJ7vgrB3xX0NyK-eN5fw&libraries=places&callback=initMap"></script>
+<script async src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=initMap"></script>

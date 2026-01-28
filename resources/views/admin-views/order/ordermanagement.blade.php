@@ -4,15 +4,10 @@
 
 @push('css_or_js')
 <style>
-.table th, .table td {
-    vertical-align: middle;
-}
-
-/* Use only where really needed */
-.nowrap {
-    white-space: nowrap;
-}
-
+    .table th, .table td {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
     .status-badge {
         padding: 6px 12px;
         border-radius: 20px;
@@ -28,19 +23,6 @@
 
 @section('content')
 <div class="container-fluid">
-{{-- Flash Messages --}}
-@if(session('success'))
-    <script>
-        alert("{{ session('success') }}");
-    </script>
-@endif
-
-@if($errors->any())
-    <script>
-        alert(`{{ implode('\n', $errors->all()) }}`);
-    </script>
-@endif
-
 
 {{-- ================= HEADER ================= --}}
 <div class="d-flex align-items-center justify-content-between mb-4">
@@ -83,6 +65,7 @@
 <option value="delivered" {{ request('status')=='delivered'?'selected':'' }}>Delivered</option>
 <option value="processing" {{ request('status')=='processing'?'selected':'' }}>Processing</option>
 <option value="failed" {{ request('status')=='failed'?'selected':'' }}>Delayed</option>
+<option value="canceled" {{ request('status')=='canceled'?'selected':'' }}>Cancelled</option>
 <option value="ordered" {{ request('status')=='ordered'?'selected':'' }}>Ordered</option>
 <option value="rejected" {{ request('status')=='rejected'?'selected':'' }}>Rejected</option>
 </select>
@@ -121,25 +104,16 @@
 <tr>
   
 <th>Edit</th>
-
 <th>Order ID</th>
-
-<th>Store ID</th>
-<th>Store Name</th>
 <!-- <th>Supplier</th> -->
 <th>Product</th>
 <th>Ordered By</th>
 <th>Date</th>
 <th>Status</th>
-<th>Current Qty</th>
-<th>Return Qty</th>
+<th>Qty</th>
 <th>Total ₹</th>
 <th>Paid ₹</th>
-<th>Arrear Amount ₹</th>
-<th>Store Total ₹</th>
-<th>Store Paid ₹</th>
-<th>Store Arrear ₹</th>
-
+<th>Balance ₹</th>
 <th>Payment</th>
 <th>Note</th>
 <th>Invoice</th>    
@@ -151,8 +125,6 @@
 @forelse($orders as $order)
 
 @php
-$storeTotal = $storeTotals[$order->store_id] ?? null;
-
 $rowspan = $order->details->count();
 $paid = $order->payments->sum('amount');
 $balance = $order->order_amount - $paid;
@@ -182,18 +154,6 @@ $first = true;
 @if($first)
 <td rowspan="{{ $rowspan }}"><b>ORD-{{ $order->id }}</b></td>
 @endif
-@if($first)
-<td rowspan="{{ $rowspan }}">
-    {{ $order->store?->id ?? '-' }}
-</td>
-@endif
-
-@if($first)
-<td rowspan="{{ $rowspan }}">
-    {{ $order->store?->store_name ?? '-' }}
-</td>
-@endif
-
 <!-- 
 <td>{{ $detail->product?->supplier?->name ?? '-' }}</td> -->
 
@@ -227,49 +187,20 @@ $first = true;
 @endif
 
 <td>{{ $detail->quantity }}</td>
- <td>{{ $detail->return_qty }}</td>
-@php
-$totalWithTax = $order->order_amount + ($order->total_tax_amount ?? 0);
 
-    $paidAmount   = $order->payments->sum('amount'); // ✅ REAL PAID
-    $arrearAmount = $totalWithTax - $paidAmount;
-@endphp
 @if($first)
-<td rowspan="{{ $rowspan }}">
-    {{ number_format($totalWithTax, 2) }}
-</td>
+<td rowspan="{{ $rowspan }}">{{ number_format($order->order_amount,2) }}</td>
 @endif
 
 @if($first)
-<td rowspan="{{ $rowspan }}" class="text-success fw-bold">
-    {{ number_format($paidAmount, 2) }}
-</td>
-@endif
-@if($first)
-<td rowspan="{{ $rowspan }}" class="text-danger fw-bold">
-    {{ number_format($arrearAmount, 2) }}
-</td>
-@endif
-
-
-@if($first)
-<td rowspan="{{ $rowspan }}" class="fw-bold text-primary">
-    {{ number_format($storeTotal->store_total_order ?? 0, 2) }}
-</td>
-@endif
-
-@if($first)
-<td rowspan="{{ $rowspan }}" class="fw-bold text-success">
-    {{ number_format($storeTotal->store_total_paid ?? 0, 2) }}
-</td>
+<td rowspan="{{ $rowspan }}">{{ number_format($paid,2) }}</td>
 @endif
 
 @if($first)
 <td rowspan="{{ $rowspan }}" class="fw-bold text-danger">
-    {{ number_format($storeTotal->store_arrear ?? 0, 2) }}
+{{ number_format($balance,2) }}
 </td>
 @endif
-
 
 @if($first)
 <td rowspan="{{ $rowspan }}">{{ ucfirst($order->payment_method ?? '-') }}</td>

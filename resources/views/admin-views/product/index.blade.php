@@ -153,32 +153,11 @@
                             </div>
                             <div class="col-sm-6">
                                 <div class="form-group">
-                               <label class="input-label" for="weight">
-    {{ translate('weight') }}
-    <span>({{ Helpers::get_business_settings('product_weight_unit') }})</span>
-</label>
-
-<select name="weight" id="weight" class="form-control" required>
-    <option value="">{{ translate('Select Weight') }}</option>
-
-    {{-- Grams --}}
-    <option value="10">10 g</option>
-    <option value="25">25 g</option>
-    <option value="50">50 g</option>
-    <option value="100">100 g</option>
-    <option value="200">200 g</option>
-    <option value="250">250 g</option>
-    <option value="500">500 g</option>
-
-    {{-- Kilograms --}}
-    <option value="1000">1 kg</option>
-    <option value="2000">2 kg</option>
-    <option value="5000">5 kg</option>
-    <option value="10000">10 kg</option>
-    <option value="25000">25 kg</option>
-    <option value="50000">50 kg</option>
-</select>
-
+                                    <label class="input-label" for="exampleFormControlInput1">{{ translate('weight') }}
+                                        <span>({{ Helpers::get_business_settings('product_weight_unit') }})</span>
+                                    </label>
+                                    <input type="number" min="0.01" step=".01" value="" name="weight"
+                                        class="form-control" placeholder="{{ translate('Ex : 1') }}">
                                 </div>
                             </div>
 
@@ -306,42 +285,26 @@
                                             placeholder="{{ translate('Ex : 5%') }}" required>
                                     </div>
                                 </div>
-                            <div class="col-sm-6">
-    <div class="form-group mb-0">
-        <label class="input-label">{{ translate('tax_type') }}</label>
-        <select name="tax_type" id="tax_type" class="form-control js-select2-custom">
-            <option value="percent">{{ translate('percent') }}</option>
-            <option value="amount">{{ translate('amount') }}</option>
-        </select>
-    </div>
-</div>
-
-<!-- Percentage Dropdown -->
-<div class="col-sm-6" id="tax_percent_div">
-    <div class="form-group mb-0">
-        <label class="input-label">
-            {{ translate('tax_rate') }} <span id="tax_symbol">(%)</span>
-        </label>
-        <select name="tax_percent" class="form-control">
-            <option value="0">0%</option>
-            <option value="5">5%</option>
-            <option value="12">12%</option>
-            <option value="18">18%</option>
-            <option value="28">28%</option>
-        </select>
-    </div>
-</div>
-
-<!-- Amount Textbox -->
-<div class="col-sm-6 d-none" id="tax_amount_div">
-    <div class="form-group mb-0">
-        <label class="input-label">{{ translate('tax_amount') }}</label>
-        <input type="number" min="0" step="0.01"
-               name="tax_amount" class="form-control"
-               placeholder="{{ translate('Ex : 100') }}">
-    </div>
-</div>
-
+                                <div class="col-sm-6">
+                                    <div class="form-group mb-0">
+                                        <label class="input-label"
+                                            for="exampleFormControlInput1">{{ translate('tax_type') }}</label>
+                                        <select name="tax_type" id="tax_type" class="form-control js-select2-custom">
+                                            <option value="percent">{{ translate('percent') }}</option>
+                                            <option value="amount">{{ translate('amount') }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="form-group mb-0">
+                                        <label class="input-label"
+                                            for="exampleFormControlInput1">{{ translate('tax_rate') }} <span
+                                                id="tax_symbol">(%)</span></label>
+                                        <input type="number" min="0" value="0" step="0.01"
+                                            max="100000" name="tax" class="form-control"
+                                            placeholder="{{ translate('Ex : $ 100') }}" required>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -643,21 +606,12 @@
             }
         });
 
-           $('#tax_type').on('change', function () {
-        let type = $(this).val();
-
-        if (type === 'percent') {
-            $('#tax_percent_div').removeClass('d-none');
-            $('#tax_amount_div').addClass('d-none');
-            $('#tax_symbol').html('(%)');
-        } else {
-            $('#tax_percent_div').addClass('d-none');
-            $('#tax_amount_div').removeClass('d-none');
-            $('#tax_symbol').html('');
-        }
-    });
-
-    // Trigger on page load
-    $('#tax_type').trigger('change');
+        $('#tax_type').change(function() {
+            if ($('#tax_type').val() == 'percent') {
+                $("#tax_symbol").html('(%)')
+            } else {
+                $("#tax_symbol").html('')
+            }
+        });
     </script>
 @endpush

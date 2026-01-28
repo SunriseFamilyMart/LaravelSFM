@@ -174,32 +174,12 @@
                             </div>
                             <div class="col-sm-6">
                                 <div class="form-group">
-                                  <label class="input-label" for="weight">
-    {{ translate('weight') }}
-    <span>({{ Helpers::get_business_settings('product_weight_unit') }})</span>
-</label>
-
-<select name="weight" id="weight" class="form-control" required>
-    <option value="">{{ translate('Select Weight') }}</option>
-
-    {{-- Grams --}}
-    <option value="10" {{ $product->weight == 10 ? 'selected' : '' }}>10 g</option>
-    <option value="25" {{ $product->weight == 25 ? 'selected' : '' }}>25 g</option>
-    <option value="50" {{ $product->weight == 50 ? 'selected' : '' }}>50 g</option>
-    <option value="100" {{ $product->weight == 100 ? 'selected' : '' }}>100 g</option>
-    <option value="200" {{ $product->weight == 200 ? 'selected' : '' }}>200 g</option>
-    <option value="250" {{ $product->weight == 250 ? 'selected' : '' }}>250 g</option>
-    <option value="500" {{ $product->weight == 500 ? 'selected' : '' }}>500 g</option>
-
-    {{-- Kilograms --}}
-    <option value="1000" {{ $product->weight == 1000 ? 'selected' : '' }}>1 kg</option>
-    <option value="2000" {{ $product->weight == 2000 ? 'selected' : '' }}>2 kg</option>
-    <option value="5000" {{ $product->weight == 5000 ? 'selected' : '' }}>5 kg</option>
-    <option value="10000" {{ $product->weight == 10000 ? 'selected' : '' }}>10 kg</option>
-    <option value="25000" {{ $product->weight == 25000 ? 'selected' : '' }}>25 kg</option>
-    <option value="50000" {{ $product->weight == 50000 ? 'selected' : '' }}>50 kg</option>
-</select>
-
+                                    <label class="input-label" for="exampleFormControlInput1">{{ translate('weight') }}
+                                        <span>({{ Helpers::get_business_settings('product_weight_unit') }})</span>
+                                    </label>
+                                    <input type="number" min="0.01" step=".01"
+                                        value="{{ $product['weight'] }}" name="weight" class="form-control"
+                                        placeholder="{{ translate('Ex : 1') }}">
                                 </div>
                             </div>
 
@@ -347,54 +327,30 @@
                                             placeholder="{{ translate('Ex : 100') }}" required>
                                     </div>
                                 </div>
-                              <div class="col-sm-6">
-    <div class="form-group mb-0">
-        <label class="input-label">{{ translate('tax_type') }}</label>
-        <select name="tax_type" id="tax_type" class="form-control">
-            <option value="percent" {{ $product['tax_type'] == 'percent' ? 'selected' : '' }}>
-                {{ translate('percent') }}
-            </option>
-            <option value="amount" {{ $product['tax_type'] == 'amount' ? 'selected' : '' }}>
-                {{ translate('amount') }}
-            </option>
-        </select>
-    </div>
-</div>
-
-<div class="col-sm-6">
-    <div class="form-group mb-0">
-        <label class="input-label">
-            {{ translate('tax_rate') }}
-            <span id="tax_symbol">
-                {{ $product['tax_type'] == 'percent' ? '(%)' : '' }}
-            </span>
-        </label>
-
-     <!-- PERCENT DROPDOWN -->
-<select name="tax_percent" id="tax_percent"
-    class="form-control"
-    style="{{ $product['tax_type'] == 'percent' ? '' : 'display:none;' }}">
-    <option value="0" {{ $product['tax'] == 0 ? 'selected' : '' }}>No Tax (0%)</option>
-    <option value="5" {{ $product['tax'] == 5 ? 'selected' : '' }}>GST 5%</option>
-    <option value="12" {{ $product['tax'] == 12 ? 'selected' : '' }}>GST 12%</option>
-    <option value="18" {{ $product['tax'] == 18 ? 'selected' : '' }}>GST 18%</option>
-    <option value="28" {{ $product['tax'] == 28 ? 'selected' : '' }}>GST 28%</option>
-</select>
-
-<!-- AMOUNT INPUT -->
-<input type="number"
-    name="tax_amount"
-    id="tax_amount"
-    class="form-control"
-    value="{{ $product['tax'] }}"
-    min="0"
-    step="any"
-    placeholder="Ex : 50"
-    style="{{ $product['tax_type'] == 'amount' ? '' : 'display:none;' }}">
-
-    </div>
-</div>
-
+                                <div class="col-sm-6">
+                                    <div class="form-group mb-0">
+                                        <label class="input-label"
+                                            for="exampleFormControlInput1">{{ translate('tax_type') }}</label>
+                                        <select name="tax_type" id="tax_type" class="form-control js-select2-custom">
+                                            <option value="percent" {{ $product['tax_type'] == 'percent' ? 'selected' : '' }}>
+                                                {{ translate('percent') }}
+                                            </option>
+                                            <option value="amount" {{ $product['tax_type'] == 'amount' ? 'selected' : '' }}>
+                                                {{ translate('amount') }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="form-group mb-0">
+                                        <label class="input-label"
+                                            for="exampleFormControlInput1">{{ translate('tax_rate') }} <span
+                                                id="tax_symbol">{{ $product['tax_type'] == 'amount' ? '' : '(%)' }}</span></label>
+                                        <input type="number" value="{{ $product['tax'] }}" min="0"
+                                            max="100000" name="tax" class="form-control" step="any"
+                                            placeholder="{{ translate('Ex : 7') }}" required>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -651,33 +607,23 @@
         });
     </script>
 
- <script>
-$('#discount_type').on('change', function () {
-    if ($(this).val() === 'percent') {
-        $('#discount_symbol').html('(%)');
-    } else {
-        $('#discount_symbol').html('');
-    }
-});
+    <script>
+        $('#discount_type').change(function() {
+            if ($('#discount_type').val() == 'percent') {
+                $("#discount_symbol").html('(%)')
+            } else {
+                $("#discount_symbol").html('')
+            }
+        });
 
-$('#tax_type').on('change', function () {
-    let taxType = $(this).val();
-
-    if (taxType === 'percent') {
-        $('#tax_symbol').html('(%)');
-        $('#tax_percent').show();
-        $('#tax_amount').hide();
-    } else {
-        $('#tax_symbol').html('');
-        $('#tax_percent').hide();
-        $('#tax_amount').show();
-    }
-});
-
-$(document).ready(function () {
-    $('#tax_type').trigger('change');
-});
-</script>
+        $('#tax_type').change(function() {
+            if ($('#tax_type').val() == 'percent') {
+                $("#tax_symbol").html('(%)')
+            } else {
+                $("#tax_symbol").html('')
+            }
+        });
+    </script>
 
     <script>
         function update_qty() {
