@@ -1,0 +1,682 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Model\BusinessSetting;
+use App\Model\Order;
+use App\Model\OrderPayment;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+class OnlinePaymentController extends Controller
+{
+    /**
+     * Get UPI and Bank details for payment screen
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUpiDetails()
+    {
+        try {
+            // Fetch UPI details
+            $upiId = BusinessSetting::where('key', 'upi_id')->first();
+            $merchantName = BusinessSetting::where('key', 'upi_merchant_name')->first();
+            
+            // Fetch Bank details (optional)
+            $bankName = BusinessSetting::where('key', 'bank_name')->first();
+            $accountNumber = BusinessSetting::where('key', 'bank_account_number')->first();
+            $ifscCode = BusinessSetting::where('key', 'bank_ifsc_code')->first();
+            $accountHolder = BusinessSetting::where('key', 'bank_account_holder')->first();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'UPI details fetched successfully',
+                'data' => [
+                    'upi_details' => [
+                        'upi_id' => $upiId->value ?? '',
+                        'merchant_name' => $merchantName->value ?? 'Store',
+                        'is_configured' => !empty($upiId->value),
+                    ],
+                    'bank_details' => [
+                        'bank_name' => $bankName->value ?? '',
+                        'account_number' => $accountNumber->value ?? '',
+                        'ifsc_code' => $ifscCode->value ?? '',
+                        'account_holder' => $accountHolder->value ?? '',
+                        'is_configured' => !empty($accountNumber->value),
+                    ],
+                    'supported_apps' => [
+                        [
+                            'name' => 'Google Pay',
+                            'code' => 'gpay',
+                            'scheme' => 'tez://upi/pay',
+                            'package' => 'com.google.android.apps.nbu.paisa.user',
+                            'icon' => 'gpay',
+                            'color' => '#4285F4',
+                        ],
+                        [
+                            'name' => 'PhonePe',
+                            'code' => 'phonepe',
+                            'scheme' => 'phonepe://pay',
+                            'package' => 'com.phonepe.app',
+                            'icon' => 'phonepe',
+                            'color' => '#5F259F',
+                        ],
+                        [
+                            'name' => 'Paytm',
+                            'code' => 'paytm',
+                            'scheme' => 'paytmmp://pay',
+                            'package' => 'net.one97.paytm',
+                            'icon' => 'paytm',
+                            'color' => '#00BAF2',
+                        ],
+                        [
+                            'name' => 'BHIM UPI',
+                            'code' => 'bhim',
+                            'scheme' => 'upi://pay',
+                            'package' => 'in.org.npci.upiapp',
+                            'icon' => 'bhim',
+                            'color' => '#00695C',
+                        ],
+                        [
+                            'name' => 'Amazon Pay',
+                            'code' => 'amazonpay',
+                            'scheme' => 'amazonpay://pay',
+                            'package' => 'in.amazon.mShop.android.shopping',
+                            'icon' => 'amazon',
+                            'color' => '#FF9900',
+                        ],
+                    ],
+                ]
+            ], 200);
+            
+        } catch (\Exception $e) {
+            Log::error('Error fetching UPI details: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch payment details',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create payment intent for tracking
+     * Returns UPI details + unique payment reference
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function createIntent(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required|exists:orders,id',
+            'amount' => 'required|numeric|min:1',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $order = Order::find($request->order_id);
+            
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order not found'
+                ], 404);
+            }
+
+            // Generate unique payment reference
+            $paymentRef = 'PAY' . strtoupper(uniqid()) . rand(100, 999);
+            
+            // Create payment record with pending status
+            $payment = OrderPayment::create([
+                'order_id' => $request->order_id,
+                'payment_method' => 'online_payment',
+                'amount' => $request->amount,
+                'transaction_id' => $paymentRef,
+                'payment_status' => 'pending',
+                'payment_date' => now()->format('Y-m-d'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Get UPI details
+            $upiId = BusinessSetting::where('key', 'upi_id')->first();
+            $merchantName = BusinessSetting::where('key', 'upi_merchant_name')->first();
+
+            // Generate UPI URL
+            $upiUrl = $this->generateUpiUrl(
+                $upiId->value ?? '',
+                $merchantName->value ?? 'Store',
+                $request->amount,
+                $paymentRef,
+                "Order #{$order->id}"
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment intent created successfully',
+                'data' => [
+                    'payment_ref' => $paymentRef,
+                    'payment_id' => $payment->id,
+                    'order_id' => $order->id,
+                    'amount' => (float) $request->amount,
+                    'status' => 'pending',
+                    'expires_at' => now()->addMinutes(15)->toIso8601String(),
+                    'upi_details' => [
+                        'upi_id' => $upiId->value ?? '',
+                        'merchant_name' => $merchantName->value ?? 'Store',
+                        'upi_url' => $upiUrl,
+                    ],
+                    'deep_links' => [
+                        'gpay' => str_replace('upi://', 'tez://upi/', $upiUrl),
+                        'phonepe' => str_replace('upi://pay', 'phonepe://pay', $upiUrl),
+                        'paytm' => str_replace('upi://pay', 'paytmmp://pay', $upiUrl),
+                        'bhim' => $upiUrl,
+                        'amazonpay' => str_replace('upi://pay', 'amazonpay://pay', $upiUrl),
+                    ],
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating payment intent: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create payment intent',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Check payment status (for polling)
+     * 
+     * @param string $payment_ref
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function checkStatus($payment_ref)
+    {
+        try {
+            $payment = OrderPayment::where('transaction_id', $payment_ref)->first();
+
+            if (!$payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not found'
+                ], 404);
+            }
+
+            $order = Order::find($payment->order_id);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'payment_ref' => $payment_ref,
+                    'status' => $payment->payment_status,
+                    'amount' => (float) $payment->amount,
+                    'order_id' => $payment->order_id,
+                    'order_status' => $order ? $order->order_status : null,
+                    'payment_method' => $payment->payment_method,
+                    'transaction_id' => $payment->transaction_id,
+                    'verified_at' => $payment->payment_status === 'complete' ? $payment->updated_at : null,
+                    'created_at' => $payment->created_at,
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error checking payment status: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to check payment status',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cancel payment
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function cancelPayment(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'payment_ref' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
+
+            if (!$payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not found'
+                ], 404);
+            }
+
+            if ($payment->payment_status === 'complete') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot cancel a completed payment'
+                ], 400);
+            }
+
+            $payment->update([
+                'payment_status' => 'failed',
+                'updated_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment cancelled successfully',
+                'data' => [
+                    'payment_ref' => $request->payment_ref,
+                    'status' => 'failed',
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error cancelling payment: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cancel payment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Confirm payment (called by delivery man)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function confirmPayment(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'payment_ref' => 'required|string',
+            'transaction_id' => 'nullable|string|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
+
+            if (!$payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not found'
+                ], 404);
+            }
+
+            if ($payment->payment_status === 'complete') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment already confirmed'
+                ], 400);
+            }
+
+            // Update payment record
+            $payment->update([
+                'payment_status' => 'complete',
+                'transaction_id' => $request->transaction_id ?? $payment->transaction_id,
+                'updated_at' => now(),
+            ]);
+
+            // Update order payment status
+            $order = Order::find($payment->order_id);
+            $totalPaid = 0;
+            $totalDue = 0;
+            $remaining = 0;
+            
+            if ($order) {
+                // Calculate total paid amount
+                $totalPaid = OrderPayment::where('order_id', $order->id)
+                    ->where('payment_status', 'complete')
+                    ->sum('amount');
+
+                // Calculate total due
+                $totalDue = $order->order_amount + 
+                           ($order->total_tax_amount ?? 0) + 
+                           ($order->delivery_charge ?? 0) -
+                           ($order->coupon_discount_amount ?? 0);
+
+                // Update order payment status
+                if ($totalPaid >= $totalDue) {
+                    $order->update([
+                        'payment_status' => 'paid',
+                        'updated_at' => now(),
+                    ]);
+                } else {
+                    $order->update([
+                        'payment_status' => 'partial',
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                // Calculate remaining balance
+                $remaining = max(0, $totalDue - $totalPaid);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment confirmed successfully',
+                'data' => [
+                    'payment_ref' => $request->payment_ref,
+                    'status' => 'complete',
+                    'amount' => (float) $payment->amount,
+                    'transaction_id' => $payment->transaction_id,
+                    'order_id' => $payment->order_id,
+                    'order_payment_status' => $order->payment_status ?? 'unknown',
+                    'total_paid' => (float) $totalPaid,
+                    'total_due' => (float) $totalDue,
+                    'remaining' => (float) $remaining,
+                    'confirmed_at' => now()->toIso8601String(),
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error confirming payment: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to confirm payment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate UPI URL for payment
+     * 
+     * @param string $upiId
+     * @param string $merchantName
+     * @param float $amount
+     * @param string $transactionRef
+     * @param string $transactionNote
+     * @return string
+     */
+    private function generateUpiUrl($upiId, $merchantName, $amount, $transactionRef, $transactionNote = '')
+    {
+        $params = [
+            'pa' => $upiId,                    // Payee address (UPI ID)
+            'pn' => $merchantName,             // Payee name
+            'am' => number_format($amount, 2, '.', ''), // Amount
+            'cu' => 'INR',                     // Currency
+            'tn' => $transactionNote,          // Transaction note
+            'tr' => $transactionRef,           // Transaction reference
+        ];
+
+        $queryString = http_build_query($params);
+        
+        return 'upi://pay?' . $queryString;
+    }
+
+    /**
+     * Admin: Manually verify a payment (from admin panel)
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function adminVerifyPayment(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'payment_ref' => 'required|string',
+            'verified' => 'required|boolean',
+            'admin_note' => 'nullable|string|max:500',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
+
+            if (!$payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment not found'
+                ], 404);
+            }
+
+            $newStatus = $request->verified ? 'complete' : 'failed';
+
+            $payment->update([
+                'payment_status' => $newStatus,
+                'updated_at' => now(),
+            ]);
+
+            // Update order if verified
+            if ($request->verified) {
+                $order = Order::find($payment->order_id);
+                
+                if ($order) {
+                    $totalPaid = OrderPayment::where('order_id', $order->id)
+                        ->where('payment_status', 'complete')
+                        ->sum('amount');
+
+                    $totalDue = $order->order_amount + 
+                               ($order->total_tax_amount ?? 0) + 
+                               ($order->delivery_charge ?? 0);
+
+                    if ($totalPaid >= $totalDue) {
+                        $order->update(['payment_status' => 'paid']);
+                    } else {
+                        $order->update(['payment_status' => 'partial']);
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => $request->verified ? 'Payment verified successfully' : 'Payment marked as failed',
+                'data' => [
+                    'payment_ref' => $request->payment_ref,
+                    'status' => $newStatus,
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error verifying payment: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to verify payment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get payment history for an order
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getOrderPayments(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'order_id' => 'required|exists:orders,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $order = Order::find($request->order_id);
+            
+            $payments = OrderPayment::where('order_id', $request->order_id)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($payment) {
+                    return [
+                        'id' => $payment->id,
+                        'payment_ref' => $payment->transaction_id,
+                        'amount' => (float) $payment->amount,
+                        'payment_method' => $payment->payment_method,
+                        'status' => $payment->payment_status,
+                        'payment_date' => $payment->payment_date,
+                        'created_at' => $payment->created_at,
+                    ];
+                });
+
+            // Calculate totals
+            $totalDue = $order->order_amount + 
+                       ($order->total_tax_amount ?? 0) + 
+                       ($order->delivery_charge ?? 0) -
+                       ($order->coupon_discount_amount ?? 0);
+
+            $totalPaid = OrderPayment::where('order_id', $request->order_id)
+                ->where('payment_status', 'complete')
+                ->sum('amount');
+
+            $totalPending = OrderPayment::where('order_id', $request->order_id)
+                ->where('payment_status', 'pending')
+                ->sum('amount');
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'order_id' => $request->order_id,
+                    'payments' => $payments,
+                    'summary' => [
+                        'total_due' => (float) $totalDue,
+                        'total_paid' => (float) $totalPaid,
+                        'total_pending' => (float) $totalPending,
+                        'remaining' => (float) max(0, $totalDue - $totalPaid),
+                        'payment_status' => $order->payment_status,
+                    ],
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching order payments: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch payment history',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Generate QR code data URL
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function generateQrCode(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:1',
+            'order_id' => 'nullable|exists:orders,id',
+            'note' => 'nullable|string|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $upiId = BusinessSetting::where('key', 'upi_id')->first();
+            $merchantName = BusinessSetting::where('key', 'upi_merchant_name')->first();
+
+            if (empty($upiId->value)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'UPI not configured'
+                ], 400);
+            }
+
+            $transactionRef = 'QR' . strtoupper(uniqid());
+            $note = $request->note ?? ($request->order_id ? "Order #{$request->order_id}" : 'Payment');
+
+            $upiUrl = $this->generateUpiUrl(
+                $upiId->value,
+                $merchantName->value ?? 'Store',
+                $request->amount,
+                $transactionRef,
+                $note
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'upi_url' => $upiUrl,
+                    'amount' => (float) $request->amount,
+                    'upi_id' => $upiId->value,
+                    'merchant_name' => $merchantName->value ?? 'Store',
+                    'transaction_ref' => $transactionRef,
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error generating QR code: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR code',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+}

