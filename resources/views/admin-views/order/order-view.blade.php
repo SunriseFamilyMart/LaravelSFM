@@ -129,6 +129,13 @@
                                     href={{ route('admin.orders.generate-invoice', [$order['id']]) }}>
                                     <i class="tio-print mr-1"></i> {{ translate('print') }} {{ translate('invoice') }}
                                 </a>
+                                @if($order->creditNotes && $order->creditNotes->count())
+                                    <a class="btn btn-warning" target="_blank"
+                                        href="{{ route('admin.credit-note.show', $order->creditNotes->first()->id) }}">
+                                        <i class="tio-receipt"></i> Credit Note
+                                    </a>
+                                @endif
+
                             </div>
                             <div class="text-right mt-3 order-invoice-right-contents text-capitalize">
 
@@ -243,6 +250,9 @@
                                         <th class="border-0 text-right">{{ translate('Price') }}</th>
                                         <th class="border-0 text-right">{{ translate('Discount') }}</th>
                                         <th class="text-right border-0">{{ translate('Total Price') }}</th>
+                                        @if(in_array($order->order_status, ['returned','partial_delivered']))
+                                        <th class="text-center border-0">Select</th>
+                                        @endif
                                     </tr>
                                 </thead>
                                 @foreach ($order->details as $detail)
@@ -305,9 +315,20 @@
                                                 @php($totalItemDiscount += $detail['discount_on_product'] * $detail['quantity'])
                                                 @php($price_after_discount += $amount - $totalItemDiscount)
                                                 @php($subTotal += $price_after_discount)
-                                                <h5>{{ Helpers::set_symbol($detail['price'] * $detail['quantity'] - $detail['discount_on_product'] * $detail['quantity']) }}
-                                                </h5>
+    <h5>{{ Helpers::set_symbol($detail['price'] * $detail['quantity'] - $detail['discount_on_product'] * $detail['quantity']) }}</h5>
+</td>
+@if(in_array($order->order_status, ['returned','partial_delivered']))
+<td class="text-center">
+    <input type="checkbox"
+           class="return-checkbox"
+           value="{{ $detail->id }}">
+</td>
+@endif
+
+
                                             </td>
+                                            
+
                                         </tr>
                                     @endif
                                 @endforeach
@@ -317,6 +338,27 @@
                                     </td>
                                 </tr>
                             </table>
+                            @if(in_array($order->order_status, ['returned','partial_delivered']))
+<div class="text-right mt-3">
+
+    <button class="btn btn-danger"
+        onclick="processSelectedReturns('damaged')">
+        Damaged
+    </button>
+
+    <button class="btn btn-warning"
+        onclick="processSelectedReturns('expired')">
+        Expired
+    </button>
+
+    <button class="btn btn-success"
+        onclick="processSelectedReturns('restock')">
+        Restock
+    </button>
+
+</div>
+@endif
+
                         </div>
 
                         <div class="row justify-content-md-end mb-3 mt-4">
@@ -1399,6 +1441,44 @@
             var status = $(this).data('status');
             verify_offline_payment(status);
         });
+
+       function processSelectedReturns(reason) {
+
+    let selected = [];
+
+    document.querySelectorAll('.return-checkbox:checked')
+        .forEach(cb => selected.push(cb.value));
+
+    if(selected.length === 0){
+        alert("Select items first");
+        return;
+    }
+
+    if(!confirm("Generate credit note?")) return;
+
+    fetch("{{ route('admin.orders.credit-note.create') }}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-TOKEN": "{{ csrf_token() }}"
+        },
+        body: JSON.stringify({
+            order_id: {{ $order->id }},
+            reason: reason,
+            items: selected.map(id => ({
+                detail_id: id,
+                qty: 1
+            }))
+        })
+    })
+    .then(res => res.json())
+    .then(() => {
+        alert("Credit note created");
+        location.reload();
+    });
+}
+
+
 
         function offline_payment_order_alert(message) {
             Swal.fire({

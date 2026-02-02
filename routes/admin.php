@@ -221,6 +221,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
             Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
+            Route::post('return', [OrderController::class, 'returnOrderItem'])->name('return');
             Route::get('status', [OrderController::class, 'status'])->name('status');
             Route::get('add-delivery-man/{order_id}/{delivery_man_id}', [OrderController::class, 'addDeliveryman'])->name('add-delivery-man');
             Route::get('payment-status', [OrderController::class, 'paymentStatus'])->name('payment-status');
@@ -556,3 +557,30 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
 });
 Route::get('/admin/report/sale-report/export', [ReportController::class, 'exportSalesReport'])
     ->name('admin.report.sales.export');
+
+
+Route::post(
+    '/orders/credit-note',
+    [OrderController::class, 'createCreditNote']
+)->name('orders.credit-note');
+
+Route::post('/admin/orders/return', 
+    [App\Http\Controllers\Admin\OrderController::class, 'returnOrderItem']
+)->name('orders.return');
+
+
+Route::group([
+    'prefix' => 'admin',
+    'as' => 'admin.',
+    'middleware' => ['admin']
+], function () {
+
+    Route::post(
+        '/orders/credit-note/create',
+        [OrderController::class, 'createCreditNote']
+    )->name('orders.credit-note.create');
+
+});
+
+
+       

@@ -142,6 +142,18 @@
                                         class="form-control" placeholder="{{ translate('Ex : 54ml') }}" required>
                                 </div>
                             </div>
+                            {{-- Minimum Order Quantity --}}
+                            <div class="col-sm-6">
+                            <div class="form-group">
+                                <label class="input-label">
+                                    {{ translate('Minimum_Order_Quantity') }}
+                                </label>
+                                <input type="number" min="1" step="1" value="1"
+                                    name="minimum_order_quantity"
+                                    class="form-control"
+                                    placeholder="{{ translate('Ex : 1') }}" required>
+                            </div>
+                        </div>
                             <div class="col-sm-6">
                                 <div class="form-group">
                                     <label class="input-label"

@@ -372,8 +372,6 @@
                                             {{ optional($order->branch)->name ?? 'Branch deleted!' }}
                                         </label>
                                     </td>
-
-
                                     <td>
                                         <div class="mw-90">
                                             <div>

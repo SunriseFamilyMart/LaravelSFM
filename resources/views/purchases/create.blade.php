@@ -27,27 +27,39 @@
                     @csrf
 
                     {{-- Top row: Invoice + Supplier --}}
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Invoice Number</label>
-                            <input type="text" name="invoice_number" value="{{ old('invoice_number') }}"
-                                class="form-control" placeholder="" maxlength="50">
-                        </div>
+                    {{-- Top row: Invoice + Supplier + Branch --}}
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <label class="form-label fw-semibold">Invoice Number</label>
+        <input type="text" name="invoice_number"
+               value="{{ old('invoice_number') }}"
+               class="form-control" maxlength="50">
+    </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Supplier</label>
-                            <select name="supplier_id" id="supplier_id" class="form-select" required>
-                                <option value="">Select supplier</option>
+    <div class="col-md-4">
+        <label class="form-label fw-semibold">Supplier</label>
+        <select name="supplier_id" id="supplier_id"
+                class="form-select" required>
+            <option value="">Select supplier</option>
+            @foreach ($suppliers as $supplier)
+                <option value="{{ $supplier->id }}"
+                    {{ old('supplier_id') == $supplier->id ? 'selected' : '' }}>
+                    {{ $supplier->name }} — {{ $supplier->phone }}
+                </option>
+            @endforeach
+        </select>
+    </div>
 
-                                @foreach ($suppliers as $supplier)
-                                    <option value="{{ $supplier->id }}"
-                                        {{ old('supplier_id') == $supplier->id ? 'selected' : '' }}>
-                                        {{ $supplier->name }} — {{ $supplier->phone }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
+    <div class="col-md-4">
+        <label class="form-label fw-semibold">Branch</label>
+        <select name="branch" class="form-select" required>
+            <option value="">Select Branch</option>
+            <option value="Kanakapura">Kanakapura</option>
+            <option value="Nelamangala">Nelamangala</option>
+        </select>
+    </div>
+</div>
+
 
                     {{-- Product table header --}}
                     <div class="row fw-semibold mb-2">

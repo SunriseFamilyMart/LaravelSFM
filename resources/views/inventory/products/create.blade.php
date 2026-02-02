@@ -283,7 +283,6 @@
                             });
                         </script>
                     </div>
-
                     {{-- Submit --}}
                     <div class="mt-4 d-flex justify-content-end">
                         <button type="submit" class="btn btn-success me-2">

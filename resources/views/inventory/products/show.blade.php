@@ -52,6 +52,12 @@
                                 {{ $product->daily_needs ? 'Yes' : 'No' }}</div>
                             <div class="col-sm-6 mb-2"><strong>Popularity:</strong> {{ $product->popularity_count }}</div>
                             <div class="col-sm-6 mb-2"><strong>View Count:</strong> {{ $product->view_count }}</div>
+                            <div class="col-md-3">
+                            <div class="col-sm-6 mb-2">
+<strong>Minimum Order Qty:</strong>
+    {{ $product->minimum_order_quantity ?? 1 }}
+</div>
+
                             <div class="col-sm-6 mb-2"><strong>Max Order Qty:</strong>
                                 {{ $product->maximum_order_quantity }}</div>
                             @if (!empty($categories))

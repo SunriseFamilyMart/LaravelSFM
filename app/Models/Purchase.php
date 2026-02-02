@@ -10,14 +10,17 @@ class Purchase extends Model
     use HasFactory;
 
     protected $fillable = [
+       'supplier_id',
         'product_id',
-        'supplier_id',
+        'description',
         'quantity',
         'price',
         'gst',
-        'invoice',
+        'amount',
+        'branch',
+        'batch_id',
         'invoice_number',
-
+        'invoice'
     ];
 
     public function product()

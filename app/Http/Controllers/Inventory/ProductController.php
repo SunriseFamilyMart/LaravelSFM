@@ -47,6 +47,7 @@ class ProductController extends Controller
             'total_stock' => 'required|integer|min:0',
             'tags' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'minimum_order_quantity' => 'required|integer|min:1',
         ]);
 
         // ✅ 2. Handle image upload
@@ -70,6 +71,7 @@ class ProductController extends Controller
         $product->unit = $validated['unit'] ?? 'pcs';
         $product->capacity = $validated['capacity'] ?? 0;
         $product->total_stock = $validated['total_stock'];
+        $product->minimum_order_quantity = $validated['minimum_order_quantity'];
         $product->category_ids = json_encode([
             ['id' => $validated['category_id'], 'position' => 1]
         ]);

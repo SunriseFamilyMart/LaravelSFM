@@ -24,6 +24,8 @@ class Product extends Model
         'is_featured' => 'integer',
         'weight' => 'float',
         'hsn_code' => 'string',
+        'minimum_order_quantity' => 'integer', 
+        
     ];
 
     public function translations(): \Illuminate\Database\Eloquent\Relations\MorphMany

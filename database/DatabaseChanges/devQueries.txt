@@ -1,0 +1,224 @@
+30-01-2026
+ALTER TABLE products
+ADD COLUMN minimum_order_quantity INT DEFAULT 1;
+
+ALTER TABLE admingoldenbrown_justdeall_in.purchases
+ADD COLUMN gst DECIMAL(10,2) DEFAULT 0;
+
+CREATE TABLE inventory_transactions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    product_id BIGINT UNSIGNED NOT NULL,
+    branch VARCHAR(50) NOT NULL,
+
+    type ENUM('IN','OUT') NOT NULL,
+    quantity INT NOT NULL,
+
+    reference_type VARCHAR(50) NULL,
+    reference_id BIGINT UNSIGNED NULL,
+
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+
+    INDEX(product_id),
+    INDEX(branch)
+);
+
+
+CREATE TABLE audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    user_id BIGINT UNSIGNED NULL,
+    branch VARCHAR(50) NULL,
+
+    action VARCHAR(100) NOT NULL,
+    table_name VARCHAR(100) NULL,
+    record_id BIGINT UNSIGNED NULL,
+
+    old_values JSON NULL,
+    new_values JSON NULL,
+
+    ip_address VARCHAR(45) NULL,
+    user_agent TEXT NULL,
+
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+
+    INDEX(user_id),
+    INDEX(branch),
+    INDEX(table_name)
+);
+
+
+ALTER TABLE products ADD COLUMN conversion_factor INT DEFAULT 1;
+
+
+ALTER TABLE purchases ADD COLUMN branch VARCHAR(50);
+
+
+ALTER TABLE inventory_transactions
+ADD COLUMN batch_id VARCHAR(50),
+ADD COLUMN remaining_qty INT DEFAULT 0;
+
+ALTER TABLE purchases
+ADD COLUMN batch_id VARCHAR(50);
+
+
+ALTER TABLE purchases
+ADD COLUMN description TEXT NULL;
+
+ALTER TABLE inventory_transactions
+ADD COLUMN unit_price DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER quantity
+
+
+
+ALTER TABLE inventory_transactions
+ADD COLUMN total_value DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER unit_price;
+
+
+CREATE TABLE gst_ledgers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    branch VARCHAR(100) NOT NULL,
+    
+    -- INPUT (purchase) or OUTPUT (sale)
+    type ENUM('INPUT','OUTPUT') NOT NULL,
+
+    taxable_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    gst_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+
+    reference_type VARCHAR(50) NULL,
+    reference_id BIGINT UNSIGNED NULL,
+
+    created_at TIMESTAMP NULL DEFAULT NULL,
+    updated_at TIMESTAMP NULL DEFAULT NULL
+);
+
+
+CREATE TABLE credit_notes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    credit_note_no VARCHAR(50) UNIQUE,
+    order_id BIGINT UNSIGNED,
+    branch VARCHAR(50),
+
+    customer_id BIGINT UNSIGNED NULL,
+
+    taxable_amount DECIMAL(12,2),
+    gst_amount DECIMAL(12,2),
+    total_amount DECIMAL(12,2),
+
+    reason VARCHAR(50), -- damaged / expired / restock
+
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+
+
+CREATE TABLE credit_note_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    credit_note_id BIGINT UNSIGNED,
+    product_id BIGINT UNSIGNED,
+    quantity INT,
+    price DECIMAL(12,2),
+    gst_percent DECIMAL(5,2),
+
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL
+);
+
+
+
+CREATE TABLE order_change_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    order_id BIGINT UNSIGNED NOT NULL,
+    order_detail_id BIGINT UNSIGNED NOT NULL,
+
+    delivery_man_id BIGINT UNSIGNED NULL,
+
+    reason VARCHAR(255) NULL,
+
+    old_quantity INT NOT NULL,
+    new_quantity INT NOT NULL,
+
+    old_price DECIMAL(12,2) NOT NULL,
+    new_price DECIMAL(12,2) NOT NULL,
+
+    photo VARCHAR(255) NULL,
+
+    -- Returned quantity auto derived:
+    -- returned_qty = old_quantity - new_quantity
+
+    processed TINYINT(1) DEFAULT 0,
+    processed_reason VARCHAR(50) NULL, 
+    -- damaged / expired / restock
+
+    credit_note_id BIGINT UNSIGNED NULL,
+
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+
+    INDEX(order_id),
+    INDEX(order_detail_id),
+    INDEX(delivery_man_id),
+    INDEX(processed)
+);
+
+
+ALTER TABLE order_change_logs
+ADD COLUMN credit_note_id BIGINT NULL,
+ADD COLUMN processed_at TIMESTAMP NULL;
+
+CREATE INDEX idx_credit_note_id ON order_edit_logs(credit_note_id);
+
+
+ALTER TABLE orders ADD COLUMN paid_amount DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE orders ADD COLUMN payment_status ENUM('unpaid','partial','paid') DEFAULT 'unpaid';
+
+CREATE TABLE payment_ledgers (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  store_id BIGINT,
+  order_id BIGINT NULL,
+  entry_type ENUM('DEBIT','CREDIT'),
+  amount DECIMAL(12,2),
+  payment_method VARCHAR(20),
+  transaction_ref VARCHAR(100) NULL,
+  remarks VARCHAR(255) NULL,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
+);
+
+
+CREATE TABLE payment_allocations (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  payment_ledger_id BIGINT,
+  order_id BIGINT,
+  allocated_amount DECIMAL(12,2),
+  created_at TIMESTAMP
+);
+
+CREATE TABLE store_ledgers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    store_id BIGINT UNSIGNED NOT NULL,
+
+    reference_type VARCHAR(30) NOT NULL, 
+    -- order | payment | credit_note | adjustment
+
+    reference_id BIGINT UNSIGNED NOT NULL,
+
+    debit DECIMAL(14,2) DEFAULT 0.00,   -- money store owes
+    credit DECIMAL(14,2) DEFAULT 0.00,  -- money store paid
+
+    balance_type ENUM('receivable','payable') DEFAULT 'receivable',
+
+    remarks VARCHAR(255) NULL,
+
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_store_date (store_id, created_at),
+    INDEX idx_reference (reference_type, reference_id)
+);
+

@@ -118,6 +118,7 @@
 <th>Note</th>
 <th>Invoice</th>    
 <th>Expected Date</th>
+<th>Return Action</th>
 </tr>
 </thead>
 
@@ -305,6 +306,8 @@ Outstanding: <b class="text-danger">₹{{ number_format($summary['outstanding'],
                         <input type="date" name="expected_date" id="expected_date"
                                class="form-control">
                     </div>
+
+                    
 
                     <!-- Payment Amount -->
                     <div class="mb-3">

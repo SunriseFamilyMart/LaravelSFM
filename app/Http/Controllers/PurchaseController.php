@@ -54,7 +54,7 @@ return view('purchases.index', compact('purchases', 'suppliers', 'products', 'in
         return view('purchases.create', compact('products', 'suppliers'));
     }
 
-    public function store(Request $request)
+   public function store(Request $request)
 {
     $request->validate([
         'supplier_id' => 'required|exists:suppliers,id',
@@ -76,39 +76,97 @@ return view('purchases.index', compact('purchases', 'suppliers', 'products', 'in
 
         'invoice' => 'nullable|file|mimes:pdf,jpg,jpeg,png',
         'invoice_number' => 'nullable|string|max:50',
+
+        'branch' => 'required|string'
     ]);
 
-    // Upload invoice once
+    /* ---------- Upload Invoice ---------- */
     $invoicePath = null;
     if ($request->hasFile('invoice')) {
         $invoicePath = $request->file('invoice')->store('invoices', 'public');
     }
 
-    // Loop through product rows
+    /* ---------- Loop through products ---------- */
     foreach ($request->product_id as $index => $product_id) {
-        Purchase::create([
+
+        $qty = $request->quantity[$index];
+        $price = $request->price[$index];
+        $gstPercent = $request->gst[$index] ?? 0;
+
+        $amount = ($qty * $price) + (($qty * $price) * $gstPercent / 100);
+        $batchId = 'BATCH-' . date('YmdHis') . '-' . $product_id;
+
+
+        /* ---------- Save Purchase ---------- */
+        $purchase = Purchase::create([
             'supplier_id'    => $request->supplier_id,
             'product_id'     => $product_id,
             'description'    => $request->description[$index] ?? null,
-            'quantity'       => $request->quantity[$index],
-            'price'          => $request->price[$index],
-            'gst'            => $request->gst[$index] ?? 0,
-            'amount'         => ($request->quantity[$index] * $request->price[$index]) + 
-                                (($request->quantity[$index] * $request->price[$index]) * ($request->gst[$index] ?? 0) / 100),
+            'quantity'       => $qty,
+            'price'          => $price,
+            'gst'            => $gstPercent,
+            'branch'         => $request->branch,
+            'batch_id' => $batchId,
+            'amount'         => $amount,
             'invoice_number' => $request->invoice_number,
             'invoice'        => $invoicePath,
         ]);
 
-        // Update stock
+        /* ---------- Product ---------- */
         $product = Product::find($product_id);
-        $product->total_stock += $request->quantity[$index];
+
+        /* ---------- Convert to base unit ---------- */
+        $conversionFactor = $product->conversion_factor ?? 1;
+        $baseQty = $qty * $conversionFactor;
+
+        /* ---------- Inventory Transaction ---------- */
+        \App\Models\InventoryTransaction::create([
+           'product_id' => $product->id,
+           'branch' => $request->branch,
+           'type' => 'IN',
+           'quantity' => $baseQty,
+           'remaining_qty' => $baseQty,
+           'batch_id' => $batchId,
+           'unit_price' => $price / $conversionFactor,
+           'total_value' => $price * $qty,
+           'reference_type' => 'purchase',
+           'reference_id' => $purchase->id,
+        ]);
+
+        /* ---------- GST Ledger Entry ---------- */
+        $taxable = $price * $qty;
+        $gstAmount = ($taxable * $gstPercent) / 100;
+
+        \App\Models\GstLedger::create([
+            'branch' => $request->branch,
+            'type' => 'INPUT',
+            'taxable_amount' => $taxable,
+            'gst_amount' => $gstAmount,
+            'reference_type' => 'purchase',
+            'reference_id' => $purchase->id,
+        ]);
+
+        /* ---------- Audit Log ---------- */
+        \App\Models\AuditLog::create([
+            'user_id' => auth()->id(),
+            'branch' => $request->branch,
+            'action' => 'purchase_created',
+            'table_name' => 'purchase/inventory',
+            'record_id' => $purchase->id,
+            'new_values' => json_encode($purchase->toArray()),
+            'ip_address' => request()->ip(),
+        ]);
+
+        /* ---------- Existing Stock Update ---------- */
+        $product->total_stock += $qty;
         $product->save();
     }
 
     return redirect()
         ->route('inventory.purchases.index')
-        ->with('success', 'Purchase added and stock updated successfully.');
+        ->with('success', 'Purchase added and inventory updated successfully.');
 }
+
     
 }
 

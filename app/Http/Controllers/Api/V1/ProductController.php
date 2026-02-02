@@ -43,45 +43,169 @@ class ProductController extends Controller
      * @param Request $request
      * @return JsonResponse
      */
-    public function getAllProducts(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'sort_by' => 'nullable|in:latest,popular,recommended,trending',
+  public function getAllProducts(Request $request): JsonResponse
+{
+    $validator = Validator::make($request->all(), [
+        'store_id' => 'required|exists:stores,id',
+        'sort_by'  => 'nullable|in:latest,popular,recommended,trending',
+        'limit'    => 'nullable|integer|min:1',
+        'offset'   => 'nullable|integer|min:1',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['errors' => Helpers::error_processor($validator)], 403);
+    }
+
+    // 🔑 Single source of truth
+    $store = Store::findOrFail($request->store_id);
+    $branch = $store->branch_id; // STRING, matches inventory_transactions.branch
+
+    $sortBy = $request->sort_by ?? 'latest';
+
+    switch ($sortBy) {
+        case 'popular':
+            $products = ProductLogic::getPopularProducts(
+                $request->limit,
+                $request->offset,
+                $branch
+            );
+            break;
+
+        case 'recommended':
+            $products = ProductLogic::getRecommendedProducts(
+                $request->user(),
+                $request->limit,
+                $request->offset,
+                $branch
+            );
+            break;
+
+        case 'trending':
+            $products = ProductLogic::getTrendingProducts(
+                $request->limit,
+                $request->offset,
+                $branch
+            );
+            break;
+
+        default:
+            $products = ProductLogic::getLatestProducts(
+                $request->limit,
+                $request->offset,
+                $branch
+            );
+    }
+
+    $products['products'] = Helpers::product_data_formatting(
+        $products['products'],
+        true
+    );
+
+    return response()->json($products, 200);
+}
+
+
+public static function getLatestProducts($limit, $offset, string $branch)
+{
+    $query = Product::where('status', 1)
+        ->latest()
+        ->skip($offset ?? 0)
+        ->take($limit ?? 20)
+        ->get();
+
+    foreach ($query as $product) {
+        $product->total_stock = self::calculateStock(
+            $product->id,
+            $branch
+        );
+    }
+
+    return [
+        'total_size' => Product::where('status', 1)->count(),
+        'limit'      => $limit,
+        'offset'     => $offset,
+        'products'   => $query,
+    ];
+}
+
+
+private static function calculateStock(int $productId, string $branch): int
+{
+    $inQty = DB::table('inventory_transactions')
+        ->where('product_id', $productId)
+        ->where('branch', $branch)
+        ->where('type', 'IN')
+        ->sum('quantity');
+
+    $outQty = DB::table('inventory_transactions')
+        ->where('product_id', $productId)
+        ->where('branch', $branch)
+        ->where('type', 'OUT')
+        ->sum('quantity');
+
+    return max(0, $inQty - $outQty);
+}
+
+public static function consumeStockFIFO(
+    int $productId,
+    string $branch,
+    int $sellQty,
+    int $orderId,
+    float $salePrice
+) {
+    $batches = DB::table('inventory_transactions')
+        ->where('product_id', $productId)
+        ->where('branch', $branch)
+        ->where('type', 'IN')
+        ->where('remaining_qty', '>', 0)
+        ->orderBy('created_at')
+        ->lockForUpdate()
+        ->get();
+
+    foreach ($batches as $batch) {
+        if ($sellQty <= 0) break;
+
+        $consume = min($batch->remaining_qty, $sellQty);
+
+        // OUT transaction
+        DB::table('inventory_transactions')->insert([
+            'product_id'     => $productId,
+            'branch'         => $branch,
+            'type'           => 'OUT',
+            'quantity'       => $consume,
+            'unit_price'     => $batch->unit_price,
+            'total_value'    => $consume * $batch->unit_price,
+            'batch_id'       => $batch->batch_id,
+            'reference_type' => 'ORDER',
+            'reference_id'   => $orderId,
+            'remaining_qty' => 0,
+            'created_at'     => now(),
+            'updated_at'     => now(),
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
-        }
+        // Reduce remaining qty
+        DB::table('inventory_transactions')
+            ->where('id', $batch->id)
+            ->decrement('remaining_qty', $consume);
 
-        $sortBy = $request['sort_by'];
-
-        if ($sortBy == 'latest'){
-            $products = ProductLogic::getLatestProducts($request['limit'], $request['offset']);
-        }elseif ($sortBy == 'popular'){
-            $products = ProductLogic::getPopularProducts($request['limit'], $request['offset']);
-        }elseif ($sortBy == 'recommended'){
-            $user = $request->user();
-            $products = ProductLogic::getRecommendedProducts($user, $request['limit'], $request['offset']);
-        }elseif ($sortBy == 'trending'){
-            $products = ProductLogic::getTrendingProducts($request['limit'], $request['offset']);
-        }else{
-            $products = ProductLogic::getLatestProducts($request['limit'], $request['offset']);
-        }
-
-        $products['products'] = Helpers::product_data_formatting($products['products'], true);
-        return response()->json($products, 200);
+        $sellQty -= $consume;
     }
+
+    if ($sellQty > 0) {
+        throw new \Exception('Insufficient stock');
+    }
+}
 
     /**
      * @param Request $request
      * @return JsonResponse
      */
-    public function getLatestProducts(Request $request): JsonResponse
+ /*   public function getLatestProducts(Request $request): JsonResponse
     {
         $products = ProductLogic::getLatestProducts($request['limit'], $request['offset']);
         $products['products'] = Helpers::product_data_formatting($products['products'], true);
         return response()->json($products, 200);
-    }
+    }*/
 
     /**
      * @param Request $request

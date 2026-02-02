@@ -28,6 +28,7 @@ use Box\Spout\Writer\Exception\WriterNotOpenedException;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\Factory;
+use App\Services\PaymentFifoService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +39,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use function App\CentralLogics\translate;
 use Illuminate\Support\Str;
 use App\Models\DeliveryTrip;
+use App\Models\CreditNote;
+use App\Models\CreditNoteItem;
+use App\Models\OrderChangeLog;
+use App\Models\InventoryTransaction;
+use App\Models\GstLedger;
+use App\Models\AuditLog;
+
 
 class OrderController extends Controller
 {
@@ -269,12 +277,22 @@ public function updateOrder(Request $request, $id)
 
     // Add a payment if entered
     if ($request->paid_amount > 0) {
-        $order->payments()->create([
+       /* $order->payments()->create([
             'amount'          => $request->paid_amount,
             'payment_method'  => $request->payment_method ?? 'manual',
             'payment_date'    => now(),
             'payment_status'  => $request->payment_status ?? 'pending',
         ]);
+        */
+
+         PaymentFifoService::applyPaymentFIFO(
+        storeId: $order->store_id,
+        amount: $request->paid_amount,
+        paymentMethod: $request->payment_method ?? 'manual',
+        txnRef: null,
+        userId: auth()->id(),
+        branchId: $order->branch_id
+    );
     }
 
     // Recalculate total paid
@@ -432,33 +450,33 @@ public function storeOrder(Request $request)
      * @param $id
      * @return View|Factory|RedirectResponse|Application
      */
-    public function details($id): Factory|View|Application|RedirectResponse
-    {
-        $order = $this->order
-            ->with([
-                'details',
-                'offline_payment',
-                'editLogs', // ✅ fetch edit logs
-                'editLogs.deliveryMan', // optional to show DM name
-                'editLogs.orderDetail'
-            ])
-            ->where(['id' => $id])
-            ->first();
+   public function details($id)
+{
+    $order = $this->order
+        ->with([
+            'details',
+            'offline_payment',
+            'editLogs',
+            'editLogs.deliveryMan',
+            'editLogs.orderDetail'
+        ])
+        ->find($id);
 
-        $deliverymanList = $this->delivery_man->where(['is_active' => 1])
-            ->where(function ($query) use ($order) {
-                $query->where('branch_id', $order->branch_id)
-                    ->orWhere('branch_id', 0);
-            })->get();
-
-        if ($order) {
-            return view('admin-views.order.order-view', compact('order', 'deliverymanList'));
-        } else {
-            Toastr::info(translate('No more orders!'));
-            return back();
-        }
+    if (!$order) {
+        Toastr::info(translate('Order not found!'));
+        return back();
     }
 
+    $deliverymanList = $this->delivery_man
+        ->where('is_active', 1)
+        ->where(function ($query) use ($order) {
+            $query->where('branch_id', $order->branch_id)
+                  ->orWhere('branch_id', 0);
+        })
+        ->get();
+
+    return view('admin-views.order.order-view', compact('order', 'deliverymanList'));
+}
 
     /**
      * @param $order
@@ -923,9 +941,11 @@ public function storeOrder(Request $request)
                     ->whereDate('created_at', '<=', $endDate);
             });
 
-        if ($status != 'all') {
-            $query->where(['order_status' => $status]);
-        }
+        if ($status == 'returned') {
+    $query->whereIn('order_status', ['returned', 'partial_delivered']);
+} elseif ($status != 'all') {
+    $query->where('order_status', $status);
+}
 
         $queryParam = ['branch_id' => $branchId, 'start_date' => $startDate, 'end_date' => $endDate];
 
@@ -1113,4 +1133,155 @@ public function storeOrder(Request $request)
         Toastr::success(translate('Order delivery area updated successfully.'));
         return back();
     }
+
+
+   public function createCreditNote(Request $request)
+{
+    DB::beginTransaction();
+
+    try {
+        $detail = OrderDetail::lockForUpdate()->findOrFail($request->order_detail_id);
+        $order  = Order::findOrFail($detail->order_id);
+
+        $qtyToReturn = (int) $request->qty;
+        $price       = (float) $detail->price;
+        $gstPercent  = (float) ($detail->tax ?? 0);
+
+        // 🔒 Prevent over-return
+        $alreadyReturned = OrderChangeLog::where('order_detail_id', $detail->id)
+            ->whereNotNull('credit_note_id')
+            ->sum('returned_qty');
+
+        if ($qtyToReturn > ($detail->quantity - $alreadyReturned)) {
+            throw new \Exception('Return qty exceeds available quantity');
+        }
+
+        $taxable   = $price * $qtyToReturn;
+        $gstAmount = ($taxable * $gstPercent) / 100;
+        $branch    = (string) $order->branch_id;
+
+        /* ===========================
+           1️⃣ CREDIT NOTE
+        =========================== */
+
+        $creditNo = 'CN-' . now()->format('Ymd') . '-' . rand(100,999);
+
+        $credit = CreditNote::create([
+            'credit_note_no' => $creditNo,
+            'order_id'       => $order->id,
+            'branch'         => $branch,
+            'customer_id'    => $order->user_id,
+            'taxable_amount' => $taxable,
+            'gst_amount'     => $gstAmount,
+            'total_amount'   => $taxable + $gstAmount,
+            'reason'         => $request->reason,
+        ]);
+
+        CreditNoteItem::create([
+            'credit_note_id' => $credit->id,
+            'product_id'     => $detail->product_id,
+            'quantity'       => $qtyToReturn,
+            'price'          => $price,
+            'gst_percent'    => $gstPercent,
+        ]);
+
+        /* ===========================
+           2️⃣ INVENTORY FIFO (BATCH SAFE)
+        =========================== */
+
+        $remainingQty = $qtyToReturn;
+
+        $outRows = InventoryTransaction::where('order_id', $order->id)
+            ->where('product_id', $detail->product_id)
+            ->where('type', 'OUT')
+            ->where('remaining_qty', '>', 0)
+            ->orderBy('created_at')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($outRows as $out) {
+            if ($remainingQty <= 0) break;
+
+            $consumeQty = min($remainingQty, $out->remaining_qty);
+
+            // reduce sold quantity
+            $out->remaining_qty -= $consumeQty;
+            $out->save();
+
+            // reverse inventory with SAME batch
+            InventoryTransaction::create([
+                'product_id'     => $detail->product_id,
+                'branch'         => $branch,
+                'batch_id'       => $out->batch_id,
+                'type'           => $request->reason === 'restock' ? 'IN' : 'LOSS',
+                'quantity'       => $consumeQty,
+                'remaining_qty'  => $request->reason === 'restock' ? $consumeQty : 0,
+                'order_id'       => $order->id,
+                'reference_type' => 'CREDIT_NOTE',
+                'reference_id'   => $credit->id,
+                'unit_price'     => $out->unit_price,
+                'total_value'    => $consumeQty * $out->unit_price,
+            ]);
+
+            $remainingQty -= $consumeQty;
+        }
+
+        if ($remainingQty > 0) {
+            throw new \Exception('FIFO mismatch: insufficient sold stock');
+        }
+
+        /* ===========================
+           3️⃣ GST LEDGER
+        =========================== */
+
+        GstLedger::create([
+            'branch'         => $branch,
+            'type'           => 'OUT_REVERSAL',
+            'taxable_amount' => $taxable,
+            'gst_amount'     => $gstAmount,
+            'reference_type' => 'CREDIT_NOTE',
+            'reference_id'   => $credit->id,
+        ]);
+
+        /* ===========================
+           4️⃣ ORDER CHANGE LOG
+        =========================== */
+
+        OrderChangeLog::create([
+            'order_detail_id' => $detail->id,
+            'returned_qty'    => $qtyToReturn,
+            'credit_note_id'  => $credit->id,
+            'processed_at'    => now(),
+        ]);
+
+        /* ===========================
+           5️⃣ AUDIT LOG
+        =========================== */
+
+        AuditLog::create([
+            'user_id'    => auth()->id(),
+            'branch'     => $branch,
+            'action'     => 'ORDER_ITEM_RETURN',
+            'table_name' => 'orders',
+            'record_id'  => $order->id,
+            'new_values' => json_encode([
+                'product_id' => $detail->product_id,
+                'qty'        => $qtyToReturn,
+                'credit_note'=> $creditNo,
+                'batch_fifo' => true,
+            ]),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        DB::commit();
+
+        return back()->with('success', 'Return processed successfully');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        throw $e;
+    }
+}
+
 }

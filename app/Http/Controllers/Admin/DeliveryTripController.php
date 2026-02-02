@@ -112,7 +112,7 @@ class DeliveryTripController extends Controller
                 'business_name' => 'Sunrise Family Mart',
                 'business_address' => 'Bangalore, Karnataka',
                 'business_phone' => '9999999999',
-                'business_email' => 'support@goldenbrown.com',
+                'business_email' => 'admin@sunrisefamilymart.com',
                 'business_gst' => '29ABCDE1234F1Z5'
             ];
 

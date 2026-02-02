@@ -114,42 +114,55 @@ class DeliverymanController extends Controller
             return response()->json(['message' => 'Order item not found'], 404);
         }
 
-        DB::beginTransaction();
+      DB::beginTransaction();
 
-        try {
-            // ✅ Log delete action
-            OrderEditLog::create([
-                'order_id' => $order->id,
-                'order_detail_id' => $orderDetail->id,
-                'delivery_man_id' => $deliveryman->id,
-                'reason' => $request->reason,
-                'old_quantity' => $orderDetail->quantity,
-                'new_quantity' => 0,
-                'old_price' => $orderDetail->price * $orderDetail->quantity,
-                'new_price' => 0,
+try {
+
+    // Log return
+    OrderEditLog::create([
+        'order_id' => $order->id,
+        'order_detail_id' => $orderDetail->id,
+        'delivery_man_id' => $deliveryman->id,
+        'reason' => $request->reason,
+        'old_quantity' => $orderDetail->quantity,
+        'new_quantity' => 0,
+        'old_price' => $orderDetail->price,
+        'new_price' => $orderDetail->price,
+        'is_returned' => 1
+    ]);
+
+            // ✅ AUDIT LOG
+            DB::table('audit_logs')->insert([
+                'user_id' => $deliveryman->id,
+                'branch' => $order->branch_id ?? null,
+                'action' => 'order_item_returned',
+                'table_name' => 'order_details',
+                'record_id' => $orderDetail->id,
+                'old_values' => json_encode([
+                    'quantity' => $orderDetail->quantity
+                ]),
+                'new_values' => json_encode([
+                    'quantity' => 0
+                ]),
+                'created_at' => now(),
+                'updated_at' => now()
             ]);
 
-            // ✅ Delete the item
-            $orderDetail->delete();
-
-            // ✅ Update Order Total
-            $new_total = OrderDetail::where('order_id', $order->id)
-                ->sum(DB::raw('price * quantity + tax_amount - discount_on_product'));
-
-            $order->order_amount = $new_total;
+            // mark order partial delivered
+            $order->order_status = 'partial_delivered';
             $order->save();
 
             DB::commit();
 
             return response()->json([
-                'message' => 'Product removed from order successfully',
-                'updated_order_total' => $new_total
+                'message' => 'Item marked returned'
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error'=>$e->getMessage()],500);
         }
+
     }
 
 
@@ -211,8 +224,46 @@ class DeliverymanController extends Controller
                 ]);
 
                 // ✅ Update quantity
-                $orderDetail->quantity = $item['new_quantity'];
+             //   $orderDetail->quantity = $item['new_quantity'];
+             //   $orderDetail->quantity = $item['new_quantity'];
                 $orderDetail->save();
+
+
+                $returnQty = $orderDetail->quantity - $item['new_quantity'];
+
+if ($returnQty > 0) {
+
+    OrderEditLog::create([
+        'order_id' => $order->id,
+        'order_detail_id' => $orderDetail->id,
+        'delivery_man_id' => $deliveryman->id,
+        'reason' => $item['reason'],
+        'old_quantity' => $orderDetail->quantity,
+        'new_quantity' => $item['new_quantity'],
+        'old_price' => $orderDetail->price,
+        'new_price' => $orderDetail->price,
+        'photo' => $photoPath,
+        'is_returned' => 1
+    ]);
+
+    // ✅ AUDIT LOG
+    DB::table('audit_logs')->insert([
+        'user_id' => $deliveryman->id,
+        'branch' => $order->branch_id ?? null,
+        'action' => 'partial_item_return',
+        'table_name' => 'order_details',
+        'record_id' => $orderDetail->id,
+        'old_values' => json_encode([
+            'quantity' => $orderDetail->quantity
+        ]),
+        'new_values' => json_encode([
+            'quantity' => $item['new_quantity']
+        ]),
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+}
+
             }
 
 
@@ -220,10 +271,27 @@ class DeliverymanController extends Controller
             $new_total = OrderDetail::where('order_id', $order->id)
                 ->sum(DB::raw('price * quantity + tax_amount - discount_on_product'));
 
-            $order->order_amount = $new_total;
-            $order->save();
+           $order->order_status = 'partial_delivered';
+           $order->save();
 
             DB::commit();
+
+            DB::table('audit_logs')->insert([
+    'user_id' => $deliveryman->id,
+    'branch' => $order->branch_id ?? null,
+    'action' => 'order_status_changed',
+    'table_name' => 'orders',
+    'record_id' => $order->id,
+    'old_values' => json_encode([
+        'status' => $order->getOriginal('order_status')
+    ]),
+    'new_values' => json_encode([
+        'status' => $request['status']
+    ]),
+    'created_at' => now(),
+    'updated_at' => now()
+]);
+
 
             return response()->json([
                 'message' => 'Order updated successfully',
@@ -416,142 +484,124 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
      * @return JsonResponse
      */
     public function updateOrderStatus(Request $request): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'token' => 'required',
-            'order_id' => 'required',
-            'status' => 'required'
-        ]);
+{
+    $validator = Validator::make($request->all(), [
+        'token' => 'required',
+        'order_id' => 'required|exists:orders,id',
+        'status' => 'required'
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => Helpers::error_processor($validator)], 403);
-        }
-
-        // Clean token (remove "Bearer " prefix if exists)
-        $token = str_replace('Bearer ', '', $request['token']);
-
-        $deliveryman = $this->deliveryman->where('auth_token', $token)->first();
-        if (!$deliveryman) {
-            return response()->json([
-                'errors' => [
-                    ['code' => 'delivery-man', 'message' => 'Invalid token!']
-                ]
-            ], 401);
-        }
-
-        // Update order status
-        $this->order->where([
-            'id' => $request['order_id'],
-            'delivery_man_id' => $deliveryman['id']
-        ])->update([
-                    'order_status' => $request['status']
-                ]);
-
-        $order = $this->order->find($request['order_id']);
-        if (!$order) {
-            return response()->json(['errors' => [['code' => 'order', 'message' => 'Order not found!']]], 404);
-        }
-
-        // Get language and device token
-        $languageCode = $order->is_guest == 0
-            ? ($order->customer ? $order->customer->language_code : 'en')
-            : ($order->guest ? $order->guest->language_code : 'en');
-
-        $customerFcmToken = $order->is_guest == 0
-            ? ($order->customer ? $order->customer->cm_firebase_token : null)
-            : ($order->guest ? $order->guest->fcm_token : null);
-
-        $value = null;
-
-        /** -------------------------------------------------
-         *  STATUS HANDLING
-         * -------------------------------------------------*/
-
-        if ($request['status'] == 'out_for_delivery') {
-
-            $message = Helpers::order_status_update_message('ord_start');
-            if ($languageCode != 'en') {
-                $message = $this->translate_message($languageCode, 'ord_start');
-            }
-            $value = $this->dynamic_key_replaced_message(message: $message, type: 'order', order: $order);
-
-
-        } elseif ($request['status'] == 'delivered') {
-
-            $message = Helpers::order_status_update_message('delivery_boy_delivered');
-            if ($languageCode != 'en') {
-                $message = $this->translate_message($languageCode, 'delivery_boy_delivered');
-            }
-            $value = $this->dynamic_key_replaced_message(message: $message, type: 'order', order: $order);
-
-            // Loyalty & Referral Logic
-            if ($order->is_guest == 0 && $order->user_id) {
-                CustomerLogic::create_loyalty_point_transaction($order->user_id, $order->id, $order->order_amount, 'order_place');
-
-                $user = $this->user->find($order->user_id);
-                if ($user) {
-                    $isFirstOrder = $this->order->where(['user_id' => $user->id, 'order_status' => 'delivered'])->count('id');
-                    $referred_by_user = $this->user->find($user->referred_by);
-
-                    if ($isFirstOrder < 2 && isset($user->referred_by) && isset($referred_by_user)) {
-                        if ($this->businessSetting->where('key', 'ref_earning_status')->first()->value == 1) {
-                            CustomerLogic::referral_earning_wallet_transaction($order->user_id, 'referral_order_place', $referred_by_user->id);
-                        }
-                    }
-                }
-            }
-
-            // Handle partial payment (COD)
-            if ($order['payment_method'] == 'cash_on_delivery') {
-                $partialData = OrderPartialPayment::where(['order_id' => $order->id])->first();
-                if ($partialData) {
-                    $partial = new OrderPartialPayment;
-                    $partial->order_id = $order['id'];
-                    $partial->paid_with = 'cash_on_delivery';
-                    $partial->paid_amount = $partialData->due_amount;
-                    $partial->due_amount = 0;
-                    $partial->save();
-                }
-            }
-
-        } elseif ($request['status'] == 'returned') {
-
-            $message = Helpers::order_status_update_message('order_returned');
-            if ($languageCode != 'en') {
-                $message = $this->translate_message($languageCode, 'order_returned');
-            }
-            $value = $this->dynamic_key_replaced_message(message: $message, type: 'order', order: $order);
-
-            // Optional COD handling if needed
-            // $partialData = OrderPartialPayment::where(['order_id' => $order->id])->first();
-            // if ($partialData) {
-            //     $partialData->due_amount = 0;
-            //     $partialData->save();
-            // }
-        }
-
-
-        /** -------------------------------------------------
-         *  PUSH NOTIFICATION
-         * -------------------------------------------------*/
-        try {
-            if (!empty($value)) {
-                $data = [
-                    'title' => 'Order',
-                    'description' => $value,
-                    'order_id' => $order['id'],
-                    'image' => '',
-                    'type' => 'order'
-                ];
-                Helpers::send_push_notif_to_device($customerFcmToken, $data);
-            }
-        } catch (\Exception $e) {
-            // Optional log
-        }
-
-        return response()->json(['message' => 'Status updated'], 200);
+    if ($validator->fails()) {
+        return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
+    $token = str_replace('Bearer ', '', $request->token);
+
+    $deliveryman = DeliveryMan::where('auth_token', $token)->first();
+    if (!$deliveryman) {
+        return response()->json([
+            'errors' => [['code' => 'delivery-man', 'message' => 'Invalid token!']]
+        ], 401);
+    }
+
+    $order = Order::where([
+        'id' => $request->order_id,
+        'delivery_man_id' => $deliveryman->id
+    ])->first();
+
+    if (!$order) {
+        return response()->json([
+            'errors' => [['code' => 'order', 'message' => 'Order not found!']]
+        ], 404);
+    }
+
+    DB::beginTransaction();
+
+    try {
+        $oldStatus = $order->order_status;
+        $newStatus = $request->status;
+
+        // ---------------- UPDATE STATUS ----------------
+        $order->order_status = $newStatus;
+        $order->save();
+
+        // ---------------- AUDIT LOG (STATUS CHANGE) ----------------
+        DB::table('audit_logs')->insert([
+            'user_id' => $deliveryman->id,
+            'branch' => $order->branch_id,
+            'action' => 'order_status_changed',
+            'table_name' => 'orders',
+            'record_id' => $order->id,
+            'old_values' => json_encode(['order_status' => $oldStatus]),
+            'new_values' => json_encode(['order_status' => $newStatus]),
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // ---------------- STORE LEDGER (DEBIT ON DELIVERY) ----------------
+        if ($newStatus === 'delivered' && $oldStatus !== 'delivered') {
+
+            $orderTotal = $order->order_amount + $order->total_tax_amount;
+
+            // Prevent duplicate debit
+            $alreadyDebited = DB::table('store_ledgers')
+                ->where('store_id', $order->store_id)
+                ->where('reference_type', 'order')
+                ->where('reference_id', $order->id)
+                ->exists();
+
+            if (!$alreadyDebited) {
+
+                $lastBalance = DB::table('store_ledgers')
+                    ->where('store_id', $order->store_id)
+                    ->orderByDesc('id')
+                    ->value('balance_after') ?? 0;
+
+                DB::table('store_ledgers')->insert([
+                    'store_id' => $order->store_id,
+                    'order_id' => $order->id,
+                    'entry_type' => 'debit',
+                    'amount' => $orderTotal,
+                    'balance_after' => $lastBalance - $orderTotal,
+                    'reference_type' => 'order',
+                    'reference_id' => $order->id,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                // ---------------- AUDIT LOG (LEDGER DEBIT) ----------------
+                DB::table('audit_logs')->insert([
+                    'user_id' => $deliveryman->id,
+                    'branch' => $order->branch_id,
+                    'action' => 'store_ledger_debit',
+                    'table_name' => 'store_ledgers',
+                    'record_id' => $order->id,
+                    'new_values' => json_encode([
+                        'amount' => $orderTotal,
+                        'type' => 'debit'
+                    ]),
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            }
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => 'Order status updated successfully',
+            'order_id' => $order->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 
 
     /**
@@ -1097,21 +1147,18 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         // -------------------- SAVE PAYMENTS --------------------
         $paymentRecords = [];
 
-        foreach ($validPayments as $pay) {
+       foreach ($validPayments as $pay) {
+            if ($pay['payment_method'] === 'credit_sale') continue;
 
-            // Skip credit sale — will auto create later
-            if ($pay['payment_method'] === 'credit_sale')
-                continue;
-
-            $paymentRecords[] = OrderPayment::create([
-                'order_id' => $order->id,
-                'payment_method' => $pay['payment_method'],
-                'amount' => $pay['amount'],
-                'transaction_id' => $pay['payment_method'] == 'upi' ? $pay['transaction_id'] : null,
-                'payment_date' => $pay['payment_date'] ?? now()->toDateString(),
-                'payment_status' => 'complete',
-            ]);
+            StorePaymentFifoService::apply(
+                storeId: $order->store_id,
+                amount: $pay['amount'],
+                method: $pay['payment_method'],
+                txnId: $pay['transaction_id'] ?? null,
+                userId: $deliveryman->id
+            );
         }
+
 
         $totalPaid = $incomingPaid + $alreadyPaid;
 

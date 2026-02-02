@@ -2943,4 +2943,8 @@
   'Paid' => 'Paid',
   'delivery_man' => 'Delivery man',
   'payment_method' => 'Payment method',
+  'Minimum_Order_Quantity' => 'Minimum Order Quantity',
+  'N/A' => 'N/A',
+  'Branch deleted!' => 'Branch deleted!',
+  'Branch Deleted' => 'Branch Deleted',
 );
