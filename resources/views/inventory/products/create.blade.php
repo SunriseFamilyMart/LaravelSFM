@@ -120,7 +120,7 @@
                             <label class="form-label fw-bold">Unit</label>
                             <select name="unit" class="form-select">
                                 @php
-                                    $units = ['pcs', 'ml', 'ltr', 'gm', 'kg'];
+                                    $units = ['pcs', 'ml', 'ltr', 'gm', 'kg','bag','box','ladi','bundle','tin','can','jar','pouch','case','bottle'
                                 @endphp
                                 @foreach ($units as $unit)
                                     <option value="{{ $unit }}"
