@@ -60,12 +60,11 @@ class Helpers
         }
         return self::set_price($result);
     }
-
 public static function product_data_formatting($data, $multi_data = false)
 {
     $storage = [];
 
-    // ================= RESOLVE BRANCH =================
+    // -------- Resolve BRANCH --------
     $branch = request()->branch_id 
         ?? request()->header('branch-id');
 
@@ -77,79 +76,60 @@ public static function product_data_formatting($data, $multi_data = false)
             ->where('id', $storeId)
             ->value('BRANCH');
     }
-    // ==================================================
+    // --------------------------------
 
     if ($multi_data === true) {
 
         foreach ($data as $item) {
 
-            // Decode JSON fields safely
-            $item['category_ids']   = json_decode($item['category_ids'], true);
-            $item['image']          = json_decode($item['image'], true);
-            $item['attributes']     = json_decode($item['attributes'], true);
-            $item['choice_options'] = json_decode($item['choice_options'], true);
+            // ✅ Decode JSON ONCE and AS ARRAY
+            $item['category_ids']   = json_decode($item['category_ids'], true) ?? [];
+            $item['image']          = json_decode($item['image'], true) ?? [];
+            $item['attributes']     = json_decode($item['attributes'], true) ?? [];
+            $item['choice_options'] = json_decode($item['choice_options'], true) ?? [];
 
-            // ================= STOCK CALCULATION =================
+            // -------- STOCK (SAFE) --------
+            $inventoryStock = \DB::table('inventory_transactions')
+                ->where('product_id', $item['id'])
+                ->when($branch, function ($q) use ($branch) {
+                    $q->whereRaw('TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))', [$branch]);
+                })
+                ->sum('remaining_qty');
 
-            // 1️⃣ Try branch-based stock
-            $inventoryStock = 0;
-
-            if ($branch) {
-                $inventoryStock = \DB::table('inventory_transactions')
-                    ->where('product_id', $item['id'])
-                    ->whereRaw('TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))', [$branch])
-                    ->sum('remaining_qty');
-            }
-
-            // 2️⃣ Fallback: ignore branch if zero
             if ($inventoryStock <= 0) {
                 $inventoryStock = \DB::table('inventory_transactions')
                     ->where('product_id', $item['id'])
                     ->sum('remaining_qty');
             }
 
-            \Log::info('STOCK DEBUG (FINAL)', [
-                'product_id' => $item['id'],
-                'store_id' => $storeId ?? 'NONE',
-                'branch_resolved' => $branch ?? 'NONE',
-                'final_inventory_stock' => $inventoryStock,
-            ]);
-
             $item['stock'] = (int) $inventoryStock;
             $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
-            // ======================================================
+            // --------------------------------
 
-            // Category discount
-            $categories = $item['category_ids'] ?? [];
-
-            if (!empty($categories)) {
-                $ids = [];
-                foreach ($categories as $value) {
-                    if (($value['position'] ?? null) == 1) {
-                        $ids[] = $value['id'];
-                    }
-                }
-                $item['category_discount'] =
-                    CategoryDiscount::active()->whereIn('category_id', $ids)->first();
-            } else {
-                $item['category_discount'] = [];
-            }
-
-            // Variations formatting
-            $variations = [];
-            $decoded = json_decode($item['variations'], true);
-
-            if (is_array($decoded)) {
-                foreach ($decoded as $var) {
-                    $variations[] = [
-                        'type'  => $var['type'] ?? null,
-                        'price' => isset($var['price']) ? (float) $var['price'] : 0,
-                        'stock' => isset($var['stock']) ? (int) $var['stock'] : 0,
-                    ];
+            // -------- CATEGORY DISCOUNT --------
+            $ids = [];
+            foreach ($item['category_ids'] as $value) {
+                if (isset($value['position']) && $value['position'] == 1) {
+                    $ids[] = $value['id'];
                 }
             }
 
-            $item['variations'] = $variations;
+            $item['category_discount'] = !empty($ids)
+                ? CategoryDiscount::active()->whereIn('category_id', $ids)->first()
+                : [];
+            // ----------------------------------
+
+            // Variations (safe)
+            $decoded = json_decode($item['variations'], true) ?? [];
+            $item['variations'] = [];
+
+            foreach ($decoded as $var) {
+                $item['variations'][] = [
+                    'type'  => $var['type'] ?? null,
+                    'price' => (float) ($var['price'] ?? 0),
+                    'stock' => (int) ($var['stock'] ?? 0),
+                ];
+            }
 
             // Translations
             if (!empty($item['translations'])) {
@@ -170,41 +150,8 @@ public static function product_data_formatting($data, $multi_data = false)
         return $storage;
     }
 
-    // ================= SINGLE PRODUCT =================
-
-    $data['category_ids']   = json_decode($data['category_ids'], true);
-    $data['image']          = json_decode($data['image'], true);
-    $data['attributes']     = json_decode($data['attributes'], true);
-    $data['choice_options'] = json_decode($data['choice_options'], true);
-
-    $inventoryStock = 0;
-
-    if ($branch) {
-        $inventoryStock = \DB::table('inventory_transactions')
-            ->where('product_id', $data['id'])
-            ->whereRaw('TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))', [$branch])
-            ->sum('remaining_qty');
-    }
-
-    if ($inventoryStock <= 0) {
-        $inventoryStock = \DB::table('inventory_transactions')
-            ->where('product_id', $data['id'])
-            ->sum('remaining_qty');
-    }
-
-    \Log::info('STOCK DEBUG (FINAL SINGLE)', [
-        'product_id' => $data['id'],
-        'store_id' => $storeId ?? 'NONE',
-        'branch_resolved' => $branch ?? 'NONE',
-        'final_inventory_stock' => $inventoryStock,
-    ]);
-
-    $data['stock'] = (int) $inventoryStock;
-    $data['min_order_qty'] = (int) ($data['minimum_order_quantity'] ?? 1);
-
     return $data;
 }
-
 
     public static function order_details_formatter($product)
     {
