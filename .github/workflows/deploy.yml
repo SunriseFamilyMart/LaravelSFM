@@ -15,13 +15,12 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          SSH_OPTIONS: "-4"
         with:
-          host: ${{ secrets.SERVER_HOST }}     # MUST be STATIC IPv4
-          username: ${{ secrets.SERVER_USER }} # ubuntu / bitnami
-          key: ${{ secrets.SERVER_SSH_KEY }}   # PRIVATE KEY
+          host: ${{ secrets.SERVER_HOST }}      # STATIC IPv4 ONLY
+          username: ${{ secrets.SERVER_USER }}  # usually: ubuntu
+          key: ${{ secrets.SERVER_SSH_KEY }}    # PRIVATE SSH KEY (multiline)
           port: 22
+          ssh_options: -4                       # 🔥 FORCE IPv4 (FIXES TIMEOUT)
           script: |
             set -euo pipefail
 
