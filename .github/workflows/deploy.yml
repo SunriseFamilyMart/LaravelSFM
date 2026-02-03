@@ -1,4 +1,4 @@
-name: Deploy to Server
+name: Deploy to Lightsail
 
 on:
   push:
@@ -16,13 +16,12 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}      # STATIC IPv4
-          username: ${{ secrets.SERVER_USER }}  # ubuntu
-          key: ${{ secrets.SERVER_SSH_KEY }}    # PRIVATE KEY
+          host: ${{ secrets.SERVER_HOST }}   # 65.2.162.232
+          username: ubuntu
+          key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
-          protocol: tcp4                        # ✅ FORCE IPv4 (THE REAL FIX)
           script: |
-            set -euo pipefail
+            set -e
 
             echo "🚀 Deploy started at $(date)"
 
@@ -47,7 +46,7 @@ jobs:
             sudo chown -R www-data:www-data storage bootstrap/cache
             sudo chmod -R 775 storage bootstrap/cache
 
-            echo "♻ Reloading PHP-FPM..."
+            echo "♻ Restarting PHP-FPM..."
             sudo systemctl restart php8.3-fpm
 
-            echo "✅ Deploy finished successfully at $(date)"
+            echo "✅ Deploy finished at $(date)"
