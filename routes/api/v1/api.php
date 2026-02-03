@@ -274,6 +274,7 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::get('/sales/delivery-men', [AuthController::class, 'allDeliveryMen']);
     Route::post('/sales/login', [AuthController::class, 'login']);
     Route::get('/orders/arrear', [AuthController::class, 'getAllOrdersArrear']);
+    Route::post('/sales/upi/initiate', [AuthController::class, 'initiateUpi']);
 
 
 
