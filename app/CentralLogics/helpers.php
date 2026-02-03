@@ -76,6 +76,17 @@ class Helpers
     // 🔒 NEVER USE auth() HERE
     $storeId = request()->header('store-id');
     \Log::info('PDF STORE_ID', ['store_id' => $storeId ?? 'NULL']);
+ $storeId =
+        request()->header('store_id')   // 📱 salesman app
+        ?? request()->input('store_id') // fallback
+        ?? auth('api')->user()?->store_id; // store-owner app
+
+    \Log::info('STORE HEADER DEBUG', [
+        'header_store_id' => request()->header('store_id'),
+        'input_store_id'  => request()->input('store_id'),
+        'user_store_id'   => auth('api')->user()?->store_id,
+    ]);
+
 
     $branch = null;
     if ($storeId) {
