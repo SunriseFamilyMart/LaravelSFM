@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\V1\StoreVisitController;
 use App\Http\Controllers\Api\V1\OrderApiController;
 use App\Http\Controllers\Api\V1\DeliveryManAuthController;
+use App\Http\Controllers\Api\V1\UpiPaymentController;
 use Mpdf\Tag\Del;
 
 Route::get('/hello', function () {
@@ -274,7 +275,8 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
     Route::get('/sales/delivery-men', [AuthController::class, 'allDeliveryMen']);
     Route::post('/sales/login', [AuthController::class, 'login']);
     Route::get('/orders/arrear', [AuthController::class, 'getAllOrdersArrear']);
-    Route::post('/sales/upi/initiate', [AuthController::class, 'initiateUpi']);
+    Route::post('/sales/upi/initiate', [UpiPaymentController::class, 'initiateSalesPerson']);
+    Route::post('/sales/upi/confirm', [UpiPaymentController::class, 'confirmSalesPerson']);
 
 
 
