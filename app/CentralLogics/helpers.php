@@ -72,54 +72,61 @@ public static function product_data_formatting($data, $multi_data = false)
     $storeId = auth('api')->user()?->store_id 
         ?? request()->header('store-id');
 
-    // Fallback: derive BRANCH from stores table
     if (!$branch && $storeId) {
         $branch = \DB::table('stores')
             ->where('id', $storeId)
-            ->value('BRANCH'); // ✅ EXACT COLUMN NAME
+            ->value('BRANCH');
     }
     // ==================================================
 
-    if ($multi_data == true) {
+    if ($multi_data === true) {
 
         foreach ($data as $item) {
 
-            // Decode JSON fields
-            $item['category_ids']   = json_decode($item['category_ids']);
-            $item['image']          = json_decode($item['image']);
-            $item['attributes']     = json_decode($item['attributes']);
-            $item['choice_options'] = json_decode($item['choice_options']);
+            // Decode JSON fields safely
+            $item['category_ids']   = json_decode($item['category_ids'], true);
+            $item['image']          = json_decode($item['image'], true);
+            $item['attributes']     = json_decode($item['attributes'], true);
+            $item['choice_options'] = json_decode($item['choice_options'], true);
 
-            // ================= STOCK FROM INVENTORY =================
-            $inventoryStock = \DB::table('inventory_transactions')
-                ->where('product_id', $item['id'])
-                ->when($branch, function ($q) use ($branch) {
-                    $q->where('BRANCH', $branch); // ✅ EXACT COLUMN NAME
-                })
-                ->sum('remaining_qty');
+            // ================= STOCK CALCULATION =================
 
-            // 🔍 LOG (temporary)
-            \Log::info('STOCK DEBUG (LIST)', [
+            // 1️⃣ Try branch-based stock
+            $inventoryStock = 0;
+
+            if ($branch) {
+                $inventoryStock = \DB::table('inventory_transactions')
+                    ->where('product_id', $item['id'])
+                    ->whereRaw('TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))', [$branch])
+                    ->sum('remaining_qty');
+            }
+
+            // 2️⃣ Fallback: ignore branch if zero
+            if ($inventoryStock <= 0) {
+                $inventoryStock = \DB::table('inventory_transactions')
+                    ->where('product_id', $item['id'])
+                    ->sum('remaining_qty');
+            }
+
+            \Log::info('STOCK DEBUG (FINAL)', [
                 'product_id' => $item['id'],
                 'store_id' => $storeId ?? 'NONE',
-                'branch_used' => $branch ?? 'NONE',
-                'inventory_stock' => $inventoryStock,
+                'branch_resolved' => $branch ?? 'NONE',
+                'final_inventory_stock' => $inventoryStock,
             ]);
 
             $item['stock'] = (int) $inventoryStock;
             $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
-            // =========================================================
+            // ======================================================
 
             // Category discount
-            $categories = is_array($item['category_ids'])
-                ? $item['category_ids']
-                : json_decode($item['category_ids']);
+            $categories = $item['category_ids'] ?? [];
 
-            if (!is_null($categories) && count($categories) > 0) {
+            if (!empty($categories)) {
                 $ids = [];
                 foreach ($categories as $value) {
-                    if ($value->position == 1) {
-                        $ids[] = $value->id;
+                    if (($value['position'] ?? null) == 1) {
+                        $ids[] = $value['id'];
                     }
                 }
                 $item['category_discount'] =
@@ -145,7 +152,7 @@ public static function product_data_formatting($data, $multi_data = false)
             $item['variations'] = $variations;
 
             // Translations
-            if (!empty($item['translations']) && count($item['translations'])) {
+            if (!empty($item['translations'])) {
                 foreach ($item['translations'] as $translation) {
                     if ($translation->key === 'name') {
                         $item['name'] = $translation->value;
@@ -165,23 +172,31 @@ public static function product_data_formatting($data, $multi_data = false)
 
     // ================= SINGLE PRODUCT =================
 
-    $data['category_ids']   = json_decode($data['category_ids']);
-    $data['image']          = json_decode($data['image']);
-    $data['attributes']     = json_decode($data['attributes']);
-    $data['choice_options'] = json_decode($data['choice_options']);
+    $data['category_ids']   = json_decode($data['category_ids'], true);
+    $data['image']          = json_decode($data['image'], true);
+    $data['attributes']     = json_decode($data['attributes'], true);
+    $data['choice_options'] = json_decode($data['choice_options'], true);
 
-    $inventoryStock = \DB::table('inventory_transactions')
-        ->where('product_id', $data['id'])
-        ->when($branch, function ($q) use ($branch) {
-            $q->where('BRANCH', $branch); // ✅ EXACT COLUMN NAME
-        })
-        ->sum('remaining_qty');
+    $inventoryStock = 0;
 
-    \Log::info('STOCK DEBUG (SINGLE)', [
+    if ($branch) {
+        $inventoryStock = \DB::table('inventory_transactions')
+            ->where('product_id', $data['id'])
+            ->whereRaw('TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))', [$branch])
+            ->sum('remaining_qty');
+    }
+
+    if ($inventoryStock <= 0) {
+        $inventoryStock = \DB::table('inventory_transactions')
+            ->where('product_id', $data['id'])
+            ->sum('remaining_qty');
+    }
+
+    \Log::info('STOCK DEBUG (FINAL SINGLE)', [
         'product_id' => $data['id'],
         'store_id' => $storeId ?? 'NONE',
-        'branch_used' => $branch ?? 'NONE',
-        'inventory_stock' => $inventoryStock,
+        'branch_resolved' => $branch ?? 'NONE',
+        'final_inventory_stock' => $inventoryStock,
     ]);
 
     $data['stock'] = (int) $inventoryStock;
