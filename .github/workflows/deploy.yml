@@ -16,11 +16,11 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}      # STATIC IPv4 ONLY
+          host: ${{ secrets.SERVER_HOST }}      # STATIC IPv4
           username: ${{ secrets.SERVER_USER }}  # ubuntu
           key: ${{ secrets.SERVER_SSH_KEY }}    # PRIVATE KEY
           port: 22
-          args: "-4"                            # ✅ FORCE IPv4 (THIS IS THE FIX)
+          protocol: tcp4                        # ✅ FORCE IPv4 (THE REAL FIX)
           script: |
             set -euo pipefail
 
