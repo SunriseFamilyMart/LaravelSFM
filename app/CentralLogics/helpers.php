@@ -62,98 +62,130 @@ class Helpers
     }
 
     public static function product_data_formatting($data, $multi_data = false)
-    {
-        $storage = [];
-        if ($multi_data == true) {
-            foreach ($data as $item) {
-                $variations = [];
-                $item['category_ids'] = json_decode($item['category_ids']);
-                $item['image'] = json_decode($item['image']);
-                $item['attributes'] = json_decode($item['attributes']);
-                $item['choice_options'] = json_decode($item['choice_options']);
+{
+    $storage = [];
 
-                $categories = gettype($item['category_ids']) == 'array' ? $item['category_ids'] : json_decode($item['category_ids']);
-                if (!is_null($categories) && count($categories) > 0) {
-                    $ids = [];
-                    foreach ($categories as $value) {
-                        if ($value->position == 1) {
-                            $ids[] = $value->id;
-                        }
-                    }
-                    $item['category_discount'] = CategoryDiscount::active()->where('category_id', $ids)->first();
-                } else {
-                    $item['category_discount'] = [];
-                }
+    if ($multi_data == true) {
 
-                $variations = [];
+        foreach ($data as $item) {
 
-                $decoded = json_decode($item['variations'], true);
+            // Decode JSON fields
+            $item['category_ids']   = json_decode($item['category_ids']);
+            $item['image']          = json_decode($item['image']);
+            $item['attributes']     = json_decode($item['attributes']);
+            $item['choice_options'] = json_decode($item['choice_options']);
 
-                if (is_array($decoded)) {
-                    foreach ($decoded as $var) {
-                        $variations[] = [
-                            'type' => $var['type'] ?? null,
-                            'price' => isset($var['price']) ? (float) $var['price'] : 0,
-                            'stock' => isset($var['stock']) ? (int) $var['stock'] : 0,
-                        ];
-                    }
-                }
+            // ================= STOCK & MOQ (ADDED) =================
+          //  $item['stock'] = (int) ($item['total_stock'] ?? 0);
+          $item['stock'] = (int) \DB::table('inventory_transactions')
+    ->where('product_id', $item['id'])
+    ->where('branch', request()->branch_id)
+    ->sum('remaining_qty');
 
-                $item['variations'] = $variations;
+            $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
+            // ========================================================
 
-
-                if (count($item['translations'])) {
-                    foreach ($item['translations'] as $translation) {
-                        if ($translation->key == 'name') {
-                            $item['name'] = $translation->value;
-                        }
-                        if ($translation->key == 'description') {
-                            $item['description'] = $translation->value;
-                        }
-                    }
-                }
-                unset($item['translations']);
-                array_push($storage, $item);
-            }
-            $data = $storage;
-        } else {
-            $variations = [];
-            $data['category_ids'] = gettype($data['category_ids']) == 'array' ? $data['category_ids'] : json_decode($data['category_ids']);
-            $data['image'] = gettype($data['image']) == 'array' ? $data['image'] : json_decode($data['image']);
-            $data['attributes'] = gettype($data['attributes']) == 'array' ? $data['attributes'] : json_decode($data['attributes']);
-            $data['choice_options'] = gettype($data['choice_options']) == 'array' ? $data['choice_options'] : json_decode($data['choice_options']);
-
-            $categories = gettype($data['category_ids']) == 'array' ? $data['category_ids'] : json_decode($data['category_ids'], true);
+            // Category discount
+            $categories = is_array($item['category_ids'])
+                ? $item['category_ids']
+                : json_decode($item['category_ids']);
 
             if (!is_null($categories) && count($categories) > 0) {
                 $ids = [];
                 foreach ($categories as $value) {
-                    $value = (array) $value;
-                    if ($value['position'] == 1) {
-                        $ids[] = $value['id'];
+                    if ($value->position == 1) {
+                        $ids[] = $value->id;
                     }
                 }
-                $data['category_discount'] = CategoryDiscount::active()->where('category_id', $ids)->first();
+                $item['category_discount'] =
+                    CategoryDiscount::active()->where('category_id', $ids)->first();
             } else {
-                $data['category_discount'] = [];
+                $item['category_discount'] = [];
             }
 
-            $data['variations'] = gettype($data['variations']) == 'array' ? $data['variations'] : json_decode($data['variations']);
+            // Variations formatting
+            $variations = [];
+            $decoded = json_decode($item['variations'], true);
 
-            if (count($data['translations']) > 0) {
-                foreach ($data['translations'] as $translation) {
+            if (is_array($decoded)) {
+                foreach ($decoded as $var) {
+                    $variations[] = [
+                        'type'  => $var['type'] ?? null,
+                        'price' => isset($var['price']) ? (float) $var['price'] : 0,
+                        'stock' => isset($var['stock']) ? (int) $var['stock'] : 0,
+                    ];
+                }
+            }
+
+            $item['variations'] = $variations;
+
+            // Translations
+            if (count($item['translations'])) {
+                foreach ($item['translations'] as $translation) {
                     if ($translation->key == 'name') {
-                        $data['name'] = $translation->value;
+                        $item['name'] = $translation->value;
                     }
                     if ($translation->key == 'description') {
-                        $data['description'] = $translation->value;
+                        $item['description'] = $translation->value;
                     }
                 }
             }
+
+            unset($item['translations']);
+            $storage[] = $item;
         }
 
-        return $data;
+        return $storage;
     }
+
+    // ================= SINGLE PRODUCT =================
+
+    $data['category_ids']   = is_array($data['category_ids']) ? $data['category_ids'] : json_decode($data['category_ids']);
+    $data['image']          = is_array($data['image']) ? $data['image'] : json_decode($data['image']);
+    $data['attributes']     = is_array($data['attributes']) ? $data['attributes'] : json_decode($data['attributes']);
+    $data['choice_options'] = is_array($data['choice_options']) ? $data['choice_options'] : json_decode($data['choice_options']);
+
+    // ================= STOCK & MOQ (ADDED) =================
+    $data['stock'] = (int) ($data['total_stock'] ?? 0);
+    $data['min_order_qty'] = (int) ($data['minimum_order_quantity'] ?? 1);
+    // ========================================================
+
+    // Category discount
+    $categories = is_array($data['category_ids'])
+        ? $data['category_ids']
+        : json_decode($data['category_ids'], true);
+
+    if (!is_null($categories) && count($categories) > 0) {
+        $ids = [];
+        foreach ($categories as $value) {
+            $value = (array) $value;
+            if ($value['position'] == 1) {
+                $ids[] = $value['id'];
+            }
+        }
+        $data['category_discount'] =
+            CategoryDiscount::active()->where('category_id', $ids)->first();
+    } else {
+        $data['category_discount'] = [];
+    }
+
+    $data['variations'] = is_array($data['variations'])
+        ? $data['variations']
+        : json_decode($data['variations']);
+
+    if (count($data['translations']) > 0) {
+        foreach ($data['translations'] as $translation) {
+            if ($translation->key == 'name') {
+                $data['name'] = $translation->value;
+            }
+            if ($translation->key == 'description') {
+                $data['description'] = $translation->value;
+            }
+        }
+    }
+
+    return $data;
+}
 
     public static function order_details_formatter($product)
     {
