@@ -65,6 +65,11 @@ class Helpers
 {
     $storage = [];
 
+    // Resolve branch safely (VERY IMPORTANT)
+    $branchId = request()->branch_id 
+        ?? request()->header('branch-id') 
+        ?? 'NO_BRANCH';
+
     if ($multi_data == true) {
 
         foreach ($data as $item) {
@@ -75,15 +80,25 @@ class Helpers
             $item['attributes']     = json_decode($item['attributes']);
             $item['choice_options'] = json_decode($item['choice_options']);
 
-            // ================= STOCK & MOQ (ADDED) =================
-          //  $item['stock'] = (int) ($item['total_stock'] ?? 0);
-          $item['stock'] = (int) \DB::table('inventory_transactions')
-    ->where('product_id', $item['id'])
-    ->where('branch', request()->branch_id)
-    ->sum('remaining_qty');
+            // ================= STOCK (FROM INVENTORY) =================
+            $inventoryStock = \DB::table('inventory_transactions')
+                ->where('product_id', $item['id'])
+                ->when($branchId !== 'NO_BRANCH', function ($q) use ($branchId) {
+                    $q->where('branch', $branchId);
+                })
+                ->sum('remaining_qty');
 
+            // 🔍 LOG FOR DEBUGGING
+            \Log::info('STOCK DEBUG (LIST)', [
+                'product_id' => $item['id'],
+                'branch' => $branchId,
+                'inventory_stock' => $inventoryStock,
+                'total_stock_column' => $item['total_stock'] ?? null,
+            ]);
+
+            $item['stock'] = (int) $inventoryStock;
             $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
-            // ========================================================
+            // ===========================================================
 
             // Category discount
             $categories = is_array($item['category_ids'])
@@ -98,12 +113,12 @@ class Helpers
                     }
                 }
                 $item['category_discount'] =
-                    CategoryDiscount::active()->where('category_id', $ids)->first();
+                    CategoryDiscount::active()->whereIn('category_id', $ids)->first();
             } else {
                 $item['category_discount'] = [];
             }
 
-            // Variations formatting
+            // Variations formatting (kept as-is)
             $variations = [];
             $decoded = json_decode($item['variations'], true);
 
@@ -120,12 +135,12 @@ class Helpers
             $item['variations'] = $variations;
 
             // Translations
-            if (count($item['translations'])) {
+            if (!empty($item['translations']) && count($item['translations'])) {
                 foreach ($item['translations'] as $translation) {
-                    if ($translation->key == 'name') {
+                    if ($translation->key === 'name') {
                         $item['name'] = $translation->value;
                     }
-                    if ($translation->key == 'description') {
+                    if ($translation->key === 'description') {
                         $item['description'] = $translation->value;
                     }
                 }
@@ -137,6 +152,17 @@ class Helpers
 
         return $storage;
     }
+
+    /* ================= SINGLE PRODUCT ================= */
+
+    $data['category_ids']   = json_decode($data['category_ids']);
+    $data['image']          = json_decode($data['image']);
+    $data['attributes']     = json_decode($data['attributes']);
+    $data['choice_options'] = json_decode($data['choice_options']);
+
+    $inventoryStock = \DB::table('inventory_transactions')
+        ->where('product_id', $data['i]()_
+
 
     // ================= SINGLE PRODUCT =================
 
