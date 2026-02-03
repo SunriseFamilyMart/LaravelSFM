@@ -65,10 +65,20 @@ public static function product_data_formatting($data, $multi_data = false)
 {
     $storage = [];
 
-    // Resolve branch safely (VERY IMPORTANT)
-    $branchId = request()->branch_id 
-        ?? request()->header('branch-id') 
-        ?? 'NO_BRANCH';
+    // ================= RESOLVE BRANCH =================
+    $branch = request()->branch_id 
+        ?? request()->header('branch-id');
+
+    $storeId = auth('api')->user()?->store_id 
+        ?? request()->header('store-id');
+
+    // Fallback: derive BRANCH from stores table
+    if (!$branch && $storeId) {
+        $branch = \DB::table('stores')
+            ->where('id', $storeId)
+            ->value('BRANCH'); // ✅ EXACT COLUMN NAME
+    }
+    // ==================================================
 
     if ($multi_data == true) {
 
@@ -80,25 +90,25 @@ public static function product_data_formatting($data, $multi_data = false)
             $item['attributes']     = json_decode($item['attributes']);
             $item['choice_options'] = json_decode($item['choice_options']);
 
-            // ================= STOCK (FROM INVENTORY) =================
+            // ================= STOCK FROM INVENTORY =================
             $inventoryStock = \DB::table('inventory_transactions')
                 ->where('product_id', $item['id'])
-                ->when($branchId !== 'NO_BRANCH', function ($q) use ($branchId) {
-                    $q->where('branch', $branchId);
+                ->when($branch, function ($q) use ($branch) {
+                    $q->where('BRANCH', $branch); // ✅ EXACT COLUMN NAME
                 })
                 ->sum('remaining_qty');
 
-            // 🔍 LOG FOR DEBUGGING
+            // 🔍 LOG (temporary)
             \Log::info('STOCK DEBUG (LIST)', [
                 'product_id' => $item['id'],
-                'branch' => $branchId,
+                'store_id' => $storeId ?? 'NONE',
+                'branch_used' => $branch ?? 'NONE',
                 'inventory_stock' => $inventoryStock,
-                'total_stock_column' => $item['total_stock'] ?? null,
             ]);
 
             $item['stock'] = (int) $inventoryStock;
             $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
-            // ===========================================================
+            // =========================================================
 
             // Category discount
             $categories = is_array($item['category_ids'])
@@ -118,7 +128,7 @@ public static function product_data_formatting($data, $multi_data = false)
                 $item['category_discount'] = [];
             }
 
-            // Variations formatting (kept as-is)
+            // Variations formatting
             $variations = [];
             $decoded = json_decode($item['variations'], true);
 
@@ -153,7 +163,7 @@ public static function product_data_formatting($data, $multi_data = false)
         return $storage;
     }
 
-    /* ================= SINGLE PRODUCT ================= */
+    // ================= SINGLE PRODUCT =================
 
     $data['category_ids']   = json_decode($data['category_ids']);
     $data['image']          = json_decode($data['image']);
@@ -162,16 +172,16 @@ public static function product_data_formatting($data, $multi_data = false)
 
     $inventoryStock = \DB::table('inventory_transactions')
         ->where('product_id', $data['id'])
-        ->when($branchId !== 'NO_BRANCH', function ($q) use ($branchId) {
-            $q->where('branch', $branchId);
+        ->when($branch, function ($q) use ($branch) {
+            $q->where('BRANCH', $branch); // ✅ EXACT COLUMN NAME
         })
         ->sum('remaining_qty');
 
     \Log::info('STOCK DEBUG (SINGLE)', [
         'product_id' => $data['id'],
-        'branch' => $branchId,
+        'store_id' => $storeId ?? 'NONE',
+        'branch_used' => $branch ?? 'NONE',
         'inventory_stock' => $inventoryStock,
-        'total_stock_column' => $data['total_stock'] ?? null,
     ]);
 
     $data['stock'] = (int) $inventoryStock;
@@ -179,6 +189,7 @@ public static function product_data_formatting($data, $multi_data = false)
 
     return $data;
 }
+
 
     public static function order_details_formatter($product)
     {
