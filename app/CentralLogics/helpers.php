@@ -64,74 +64,90 @@ public static function product_data_formatting($data, $multi_data = false)
 {
     $storage = [];
 
-    // -------- Resolve BRANCH --------
-    $branch = request()->branch_id 
-        ?? request()->header('branch-id');
-
-    $storeId = auth('api')->user()?->store_id 
+    // ================= RESOLVE STORE → BRANCH =================
+    $storeId = auth('api')->user()?->store_id
         ?? request()->header('store-id');
 
-    if (!$branch && $storeId) {
+    $branch = null;
+
+    if ($storeId) {
         $branch = \DB::table('stores')
             ->where('id', $storeId)
-            ->value('BRANCH');
+            ->value('BRANCH'); // EXACT COLUMN NAME
     }
-    // --------------------------------
+    // ==========================================================
 
     if ($multi_data === true) {
 
         foreach ($data as $item) {
 
-            // ✅ Decode JSON ONCE and AS ARRAY
-            $item['category_ids']   = json_decode($item['category_ids'], true) ?? [];
-            $item['image']          = json_decode($item['image'], true) ?? [];
-            $item['attributes']     = json_decode($item['attributes'], true) ?? [];
-            $item['choice_options'] = json_decode($item['choice_options'], true) ?? [];
+            /* -------- SAME AS OLD WORKING CODE -------- */
+            $item['category_ids']   = json_decode($item['category_ids']);
+            $item['image']          = json_decode($item['image']);
+            $item['attributes']     = json_decode($item['attributes']);
+            $item['choice_options'] = json_decode($item['choice_options']);
+            /* ----------------------------------------- */
 
-            // -------- STOCK (SAFE) --------
-            $inventoryStock = \DB::table('inventory_transactions')
-                ->where('product_id', $item['id'])
-                ->when($branch, function ($q) use ($branch) {
-                    $q->whereRaw('TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))', [$branch]);
-                })
-                ->sum('remaining_qty');
+            /* -------- STOCK FROM INVENTORY (SAFE) -------- */
+            $stock = null;
 
-            if ($inventoryStock <= 0) {
-                $inventoryStock = \DB::table('inventory_transactions')
-                    ->where('product_id', $item['id'])
-                    ->sum('remaining_qty');
-            }
-
-            $item['stock'] = (int) $inventoryStock;
-            $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
-            // --------------------------------
-
-            // -------- CATEGORY DISCOUNT --------
-            $ids = [];
-            foreach ($item['category_ids'] as $value) {
-                if (isset($value['position']) && $value['position'] == 1) {
-                    $ids[] = $value['id'];
+            if ($branch) {
+                try {
+                    $stock = (int) \DB::table('inventory_transactions')
+                        ->where('product_id', $item['id'])
+                        ->whereRaw(
+                            'TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))',
+                            [$branch]
+                        )
+                        ->sum('remaining_qty');
+                } catch (\Exception $e) {
+                    $stock = null; // NEVER break product listing
                 }
             }
 
-            $item['category_discount'] = !empty($ids)
-                ? CategoryDiscount::active()->whereIn('category_id', $ids)->first()
-                : [];
-            // ----------------------------------
+            $item['stock'] = $stock;
+            $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
+            /* -------------------------------------------- */
 
-            // Variations (safe)
-            $decoded = json_decode($item['variations'], true) ?? [];
-            $item['variations'] = [];
+            /* -------- CATEGORY DISCOUNT (UNCHANGED) -------- */
+            $categories = is_array($item['category_ids'])
+                ? $item['category_ids']
+                : json_decode($item['category_ids']);
 
-            foreach ($decoded as $var) {
-                $item['variations'][] = [
-                    'type'  => $var['type'] ?? null,
-                    'price' => (float) ($var['price'] ?? 0),
-                    'stock' => (int) ($var['stock'] ?? 0),
-                ];
+            if (!is_null($categories) && count($categories) > 0) {
+                $ids = [];
+                foreach ($categories as $value) {
+                    if ($value->position == 1) {
+                        $ids[] = $value->id;
+                    }
+                }
+                $item['category_discount'] =
+                    CategoryDiscount::active()
+                        ->whereIn('category_id', $ids)
+                        ->first();
+            } else {
+                $item['category_discount'] = [];
+            }
+            /* --------------------------------------------- */
+
+            /* -------- VARIATIONS (UNCHANGED) -------- */
+            $variations = [];
+            $decoded = json_decode($item['variations'], true);
+
+            if (is_array($decoded)) {
+                foreach ($decoded as $var) {
+                    $variations[] = [
+                        'type'  => $var['type'] ?? null,
+                        'price' => (float) ($var['price'] ?? 0),
+                        'stock' => (int) ($var['stock'] ?? 0),
+                    ];
+                }
             }
 
-            // Translations
+            $item['variations'] = $variations;
+            /* ---------------------------------------- */
+
+            /* -------- TRANSLATIONS (UNCHANGED) -------- */
             if (!empty($item['translations'])) {
                 foreach ($item['translations'] as $translation) {
                     if ($translation->key === 'name') {
@@ -142,6 +158,7 @@ public static function product_data_formatting($data, $multi_data = false)
                     }
                 }
             }
+            /* ----------------------------------------- */
 
             unset($item['translations']);
             $storage[] = $item;
@@ -150,6 +167,7 @@ public static function product_data_formatting($data, $multi_data = false)
         return $storage;
     }
 
+    // SINGLE PRODUCT → return as-is (same as old behavior)
     return $data;
 }
 
