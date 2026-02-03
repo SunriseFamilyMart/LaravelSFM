@@ -63,96 +63,69 @@ class Helpers
 
 
 
-    public static function product_data_formatting($data, $multi_data = false)
+   public static function product_data_formatting($data, $multi_data = false)
 {
     \Log::info('PDF START', [
         'multi_data' => $multi_data,
-        'data_type' => gettype($data),
+        'data_type'  => gettype($data),
         'data_count' => is_countable($data) ? count($data) : 'N/A',
     ]);
 
     $storage = [];
 
-    // 🔒 NEVER USE auth() HERE
-    $storeId = request()->header('store-id');
-    \Log::info('PDF STORE_ID', ['store_id' => $storeId ?? 'NULL']);
- $storeId =
-        request()->header('store_id')   // 📱 salesman app
-        ?? request()->input('store_id') // fallback
-        ?? auth('api')->user()?->store_id; // store-owner app
+    // 🔥 HARD-CODED BRANCH
+    $branch = 'Nelamangala';
 
-    \Log::info('STORE HEADER DEBUG', [
-        'header_store_id' => request()->header('store_id'),
-        'input_store_id'  => request()->input('store_id'),
-        'user_store_id'   => auth('api')->user()?->store_id,
+    \Log::info('PDF BRANCH FORCED', [
+        'branch' => $branch
     ]);
 
-
-    $branch = null;
-    if ($storeId) {
-        $branch = \DB::table('stores')
-            ->where('id', $storeId)
-            ->value('BRANCH');
-    }
-
-    \Log::info('PDF BRANCH RESOLVED', [
-        'branch' => $branch ?? 'NULL'
-    ]);
-
-    if ($multi_data == true) {
+    if ($multi_data === true) {
 
         foreach ($data as $index => $item) {
 
             \Log::info('PDF LOOP START', [
-                'index' => $index,
+                'index'      => $index,
                 'product_id' => $item['id'] ?? 'NO_ID'
             ]);
 
-            // ===== OLD WORKING LOGIC =====
-            $item['category_ids'] = json_decode($item['category_ids']);
-            $item['image'] = json_decode($item['image']);
-            $item['attributes'] = json_decode($item['attributes']);
+            // ===== JSON DECODE (OLD WORKING LOGIC) =====
+            $item['category_ids']   = json_decode($item['category_ids']);
+            $item['image']          = json_decode($item['image']);
+            $item['attributes']     = json_decode($item['attributes']);
             $item['choice_options'] = json_decode($item['choice_options']);
 
-            // ===== STOCK (SAFE) =====
-            $item['stock'] = null;
+            // ===== STOCK (FORCED BRANCH) =====
+            try {
+                $item['stock'] = (int) \DB::table('inventory_transactions')
+                    ->where('product_id', $item['id'])
+                    ->whereRaw(
+                        'TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))',
+                        [$branch]
+                    )
+                    ->sum('remaining_qty');
 
-            if ($branch) {
-                try {
-                    $item['stock'] = (int) \DB::table('inventory_transactions')
-                        ->where('product_id', $item['id'])
-                        ->whereRaw(
-                            'TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))',
-                            [$branch]
-                        )
-                        ->sum('remaining_qty');
-
-                    \Log::info('PDF STOCK QUERY', [
-                        'product_id' => $item['id'],
-                        'branch' => $branch,
-                        'stock' => $item['stock']
-                    ]);
-                } catch (\Exception $e) {
-                    \Log::error('PDF STOCK ERROR', [
-                        'product_id' => $item['id'],
-                        'error' => $e->getMessage()
-                    ]);
-                    $item['stock'] = null;
-                }
-            } else {
-                \Log::warning('PDF NO BRANCH – STOCK SKIPPED', [
-                    'product_id' => $item['id']
+                \Log::info('PDF STOCK RESULT', [
+                    'product_id' => $item['id'],
+                    'branch'     => $branch,
+                    'stock'      => $item['stock']
                 ]);
+            } catch (\Exception $e) {
+                \Log::error('PDF STOCK ERROR', [
+                    'product_id' => $item['id'],
+                    'error'      => $e->getMessage()
+                ]);
+                $item['stock'] = 0;
             }
 
             // ===== CATEGORY =====
-            $categories = gettype($item['category_ids']) == 'array'
+            $categories = is_array($item['category_ids'])
                 ? $item['category_ids']
                 : json_decode($item['category_ids']);
 
             \Log::info('PDF CATEGORIES', [
-                'product_id' => $item['id'],
-                'category_count' => is_countable($categories) ? count($categories) : 'N/A'
+                'product_id'     => $item['id'],
+                'category_count' => is_countable($categories) ? count($categories) : 0
             ]);
 
             if (!is_null($categories) && count($categories) > 0) {
@@ -175,14 +148,14 @@ class Helpers
             $decoded = json_decode($item['variations'], true);
 
             \Log::info('PDF VARIATIONS', [
-                'product_id' => $item['id'],
+                'product_id'      => $item['id'],
                 'variation_count' => is_array($decoded) ? count($decoded) : 0
             ]);
 
             if (is_array($decoded)) {
                 foreach ($decoded as $var) {
                     $variations[] = [
-                        'type' => $var['type'] ?? null,
+                        'type'  => $var['type'] ?? null,
                         'price' => (float) ($var['price'] ?? 0),
                         'stock' => (int) ($var['stock'] ?? 0),
                     ];
@@ -194,10 +167,10 @@ class Helpers
             // ===== TRANSLATIONS =====
             if (!empty($item['translations'])) {
                 foreach ($item['translations'] as $translation) {
-                    if ($translation->key == 'name') {
+                    if ($translation->key === 'name') {
                         $item['name'] = $translation->value;
                     }
-                    if ($translation->key == 'description') {
+                    if ($translation->key === 'description') {
                         $item['description'] = $translation->value;
                     }
                 }
@@ -207,7 +180,7 @@ class Helpers
             $storage[] = $item;
 
             \Log::info('PDF LOOP END', [
-                'product_id' => $item['id'],
+                'product_id'    => $item['id'],
                 'storage_count' => count($storage)
             ]);
         }
@@ -222,6 +195,7 @@ class Helpers
     \Log::info('PDF END SINGLE');
     return $data;
 }
+
 
     public static function order_details_formatter($product)
     {
