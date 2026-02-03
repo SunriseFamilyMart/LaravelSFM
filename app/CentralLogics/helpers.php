@@ -60,59 +60,89 @@ class Helpers
         }
         return self::set_price($result);
     }
-public static function product_data_formatting($data, $multi_data = false)
+
+
+
+    public static function product_data_formatting($data, $multi_data = false)
 {
+    \Log::info('PDF START', [
+        'multi_data' => $multi_data,
+        'data_type' => gettype($data),
+        'data_count' => is_countable($data) ? count($data) : 'N/A',
+    ]);
+
     $storage = [];
 
-    // ================= RESOLVE STORE → BRANCH =================
-    $storeId = auth('api')->user()?->store_id
-        ?? request()->header('store-id');
+    // 🔒 NEVER USE auth() HERE
+    $storeId = request()->header('store-id');
+    \Log::info('PDF STORE_ID', ['store_id' => $storeId ?? 'NULL']);
 
     $branch = null;
-
     if ($storeId) {
         $branch = \DB::table('stores')
             ->where('id', $storeId)
-            ->value('BRANCH'); // EXACT COLUMN NAME
+            ->value('BRANCH');
     }
-    // ==========================================================
 
-    if ($multi_data === true) {
+    \Log::info('PDF BRANCH RESOLVED', [
+        'branch' => $branch ?? 'NULL'
+    ]);
 
-        foreach ($data as $item) {
+    if ($multi_data == true) {
 
-            /* -------- SAME AS OLD WORKING CODE -------- */
-            $item['category_ids']   = json_decode($item['category_ids']);
-            $item['image']          = json_decode($item['image']);
-            $item['attributes']     = json_decode($item['attributes']);
+        foreach ($data as $index => $item) {
+
+            \Log::info('PDF LOOP START', [
+                'index' => $index,
+                'product_id' => $item['id'] ?? 'NO_ID'
+            ]);
+
+            // ===== OLD WORKING LOGIC =====
+            $item['category_ids'] = json_decode($item['category_ids']);
+            $item['image'] = json_decode($item['image']);
+            $item['attributes'] = json_decode($item['attributes']);
             $item['choice_options'] = json_decode($item['choice_options']);
-            /* ----------------------------------------- */
 
-            /* -------- STOCK FROM INVENTORY (SAFE) -------- */
-            $stock = null;
+            // ===== STOCK (SAFE) =====
+            $item['stock'] = null;
 
             if ($branch) {
                 try {
-                    $stock = (int) \DB::table('inventory_transactions')
+                    $item['stock'] = (int) \DB::table('inventory_transactions')
                         ->where('product_id', $item['id'])
                         ->whereRaw(
                             'TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))',
                             [$branch]
                         )
                         ->sum('remaining_qty');
+
+                    \Log::info('PDF STOCK QUERY', [
+                        'product_id' => $item['id'],
+                        'branch' => $branch,
+                        'stock' => $item['stock']
+                    ]);
                 } catch (\Exception $e) {
-                    $stock = null; // NEVER break product listing
+                    \Log::error('PDF STOCK ERROR', [
+                        'product_id' => $item['id'],
+                        'error' => $e->getMessage()
+                    ]);
+                    $item['stock'] = null;
                 }
+            } else {
+                \Log::warning('PDF NO BRANCH – STOCK SKIPPED', [
+                    'product_id' => $item['id']
+                ]);
             }
 
-            $item['stock'] = $stock;
-            $item['min_order_qty'] = (int) ($item['minimum_order_quantity'] ?? 1);
-            /* -------------------------------------------- */
-
-            /* -------- CATEGORY DISCOUNT (UNCHANGED) -------- */
-            $categories = is_array($item['category_ids'])
+            // ===== CATEGORY =====
+            $categories = gettype($item['category_ids']) == 'array'
                 ? $item['category_ids']
                 : json_decode($item['category_ids']);
+
+            \Log::info('PDF CATEGORIES', [
+                'product_id' => $item['id'],
+                'category_count' => is_countable($categories) ? count($categories) : 'N/A'
+            ]);
 
             if (!is_null($categories) && count($categories) > 0) {
                 $ids = [];
@@ -128,16 +158,20 @@ public static function product_data_formatting($data, $multi_data = false)
             } else {
                 $item['category_discount'] = [];
             }
-            /* --------------------------------------------- */
 
-            /* -------- VARIATIONS (UNCHANGED) -------- */
+            // ===== VARIATIONS =====
             $variations = [];
             $decoded = json_decode($item['variations'], true);
+
+            \Log::info('PDF VARIATIONS', [
+                'product_id' => $item['id'],
+                'variation_count' => is_array($decoded) ? count($decoded) : 0
+            ]);
 
             if (is_array($decoded)) {
                 foreach ($decoded as $var) {
                     $variations[] = [
-                        'type'  => $var['type'] ?? null,
+                        'type' => $var['type'] ?? null,
                         'price' => (float) ($var['price'] ?? 0),
                         'stock' => (int) ($var['stock'] ?? 0),
                     ];
@@ -145,29 +179,36 @@ public static function product_data_formatting($data, $multi_data = false)
             }
 
             $item['variations'] = $variations;
-            /* ---------------------------------------- */
 
-            /* -------- TRANSLATIONS (UNCHANGED) -------- */
+            // ===== TRANSLATIONS =====
             if (!empty($item['translations'])) {
                 foreach ($item['translations'] as $translation) {
-                    if ($translation->key === 'name') {
+                    if ($translation->key == 'name') {
                         $item['name'] = $translation->value;
                     }
-                    if ($translation->key === 'description') {
+                    if ($translation->key == 'description') {
                         $item['description'] = $translation->value;
                     }
                 }
             }
-            /* ----------------------------------------- */
 
             unset($item['translations']);
             $storage[] = $item;
+
+            \Log::info('PDF LOOP END', [
+                'product_id' => $item['id'],
+                'storage_count' => count($storage)
+            ]);
         }
+
+        \Log::info('PDF END MULTI', [
+            'final_count' => count($storage)
+        ]);
 
         return $storage;
     }
 
-    // SINGLE PRODUCT → return as-is (same as old behavior)
+    \Log::info('PDF END SINGLE');
     return $data;
 }
 
