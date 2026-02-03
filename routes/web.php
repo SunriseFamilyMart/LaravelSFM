@@ -14,6 +14,7 @@ use App\Http\Controllers\BkashPaymentController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\FirebaseController;
+use App\Http\Controllers\LogViewerController;
 use function App\CentralLogics\translate;
 use Illuminate\Support\Facades\Artisan;
 
@@ -201,3 +202,7 @@ Route::group(['prefix' => 'pages', 'as' => 'pages.'], function () {
 Route::get('test-order', function () {
 
 });
+
+
+
+Route::get('/_logs', [LogViewerController::class, 'index']);
