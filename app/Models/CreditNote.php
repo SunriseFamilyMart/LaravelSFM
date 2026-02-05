@@ -1,3 +1,5 @@
+<?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +17,6 @@ class CreditNote extends Model
         'reason'
     ];
 
-    
     public function items()
     {
         return $this->hasMany(CreditNoteItem::class);
