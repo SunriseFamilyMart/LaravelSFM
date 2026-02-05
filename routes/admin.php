@@ -220,6 +220,10 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
+            Route::post(
+    'returns/process',
+    [\App\Http\Controllers\Admin\OrderReturnController::class, 'process']
+)->name('returns.process');
             Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
             Route::post('return', [OrderController::class, 'returnOrderItem'])->name('return');
             Route::get('status', [OrderController::class, 'status'])->name('status');
@@ -564,10 +568,6 @@ Route::post(
     [OrderController::class, 'createCreditNote']
 )->name('orders.credit-note');
 
-Route::post('/orders/returns/process', [
-    \App\Http\Controllers\Admin\OrderReturnController::class,
-    'process'
-])->name('admin.orders.returns.process');
 
 
 Route::group([
