@@ -18,6 +18,8 @@ use App\Model\OrderDetail;
 use App\Model\Product;
 use Illuminate\Support\Facades\Cache;
 use App\Model\DeliveryMan;
+use Illuminate\Support\Facades\Log;
+
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 
