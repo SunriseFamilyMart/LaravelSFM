@@ -363,6 +363,51 @@
     <button class="btn btn-success return-action" data-reason="restock">
         Restock
     </button>
+    @if($order->creditNotes->count())
+<div class="card mt-3">
+    <div class="card-header">
+        <h5 class="mb-0">Credit Notes</h5>
+    </div>
+
+    <div class="card-body p-2">
+        <table class="table table-sm table-bordered text-center mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Credit Note No</th>
+                    <th>Reason</th>
+                    <th>Total</th>
+                    <th>GST</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($order->creditNotes as $note)
+                <tr>
+                    <td>{{ $loop->iteration }}</td>
+                    <td>{{ $note->credit_note_no }}</td>
+                    <td>{{ ucfirst($note->reason) }}</td>
+                    <td>{{ Helpers::set_symbol($note->total_amount) }}</td>
+                    <td>{{ Helpers::set_symbol($note->gst_amount) }}</td>
+                    <td>
+                        <a href="{{ route('admin.credit-note.show', $note->id) }}"
+                           class="btn btn-info btn-sm" target="_blank">
+                            View
+                        </a>
+
+                        <a href="{{ route('admin.credit-note.pdf', $note->id) }}"
+                           class="btn btn-success btn-sm" target="_blank">
+                            PDF
+                        </a>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+</div>
+@endif
+
 
 </div>
 @endif

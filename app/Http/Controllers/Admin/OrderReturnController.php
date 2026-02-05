@@ -76,11 +76,10 @@ class OrderReturnController extends Controller
                 $detail = OrderDetail::lockForUpdate()->findOrFail($item['detail_id']);
 
                 // Prevent double return
-                if (OrderChangeLog::where('order_detail_id', $detail->id)
-                    ->where('processed', 1)
-                    ->exists()) {
-                    throw new \Exception("Item already processed (OrderDetail ID {$detail->id})");
-                }
+               // Prevent double return (Credit Note based)
+if (CreditNoteItem::where('order_detail_id', $detail->id)->exists()) {
+    throw new \Exception("Item already returned (OrderDetail ID {$detail->id})");
+}
 
                 $returnQty = min($item['qty'], $detail->quantity);
                 if ($returnQty <= 0) {
@@ -101,13 +100,15 @@ class OrderReturnController extends Controller
                 $totalGST += $gstAmount;
 
                 /* ================= CREDIT NOTE ITEM ================= */
-                CreditNoteItem::create([
-                    'credit_note_id' => $creditNote->id,
-                    'product_id'     => $detail->product_id,
-                    'quantity'       => $returnQty,
-                    'price'          => $price,
-                    'gst_percent'    => $gstPercent,
-                ]);
+            CreditNoteItem::create([
+    'credit_note_id' => $creditNote->id,
+    'order_detail_id'=> $detail->id, // ✅ IMPORTANT
+    'product_id'     => $detail->product_id,
+    'quantity'       => $returnQty,
+    'price'          => $price,
+    'gst_percent'    => $gstPercent,
+]);
+
 
                 /* ================= INVENTORY TRANSACTION ================= */
                 InventoryTransaction::create([
