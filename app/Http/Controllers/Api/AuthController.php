@@ -689,7 +689,7 @@ return response()->json([
 
 // App PlaceOrder :Pavan
 
-   public function orders(Request $request)
+  public function orders(Request $request)
 {
     Log::info('Sales order request received', ['payload' => $request->all()]);
 
@@ -722,27 +722,41 @@ return response()->json([
     DB::beginTransaction();
 
     try {
+        /* ================= STORE → BRANCH RESOLUTION ================= */
+        $store  = Store::lockForUpdate()->findOrFail($request->store_id);
+        $branch = $store->branch; // STRING
+
+        Log::info('Branch resolved from store', [
+            'store_id' => $store->id,
+            'branch' => $branch
+        ]);
+
         /* ================= ORDER CREATE ================= */
         $order = Order::create([
+            'user_id' => null,
+            'is_guest' => 0,
             'order_amount' => 0,
             'paid_amount' => 0,
             'payment_status' => 'unpaid',
             'order_status' => 'pending',
             'payment_method' => 'cash_on_delivery',
             'order_type' => 'sales_person',
-            'branch_id' => 1,
+            'branch' => $branch,
             'date' => now()->toDateString(),
             'delivery_date' => now()->toDateString(),
             'sales_person_id' => $salesPerson->id,
-            'store_id' => $request->store_id,
+            'store_id' => $store->id,
+            'checked' => 1,
+            'delivery_charge' => 0,
+            'extra_discount' => 0,
         ]);
 
         Log::info('Sales order created', ['order_id' => $order->id]);
 
-        /* ================= AUDIT LOG ================= */
+        /* ================= AUDIT LOG (ORDER) ================= */
         DB::table('audit_logs')->insert([
             'user_id' => $salesPerson->id,
-            'branch' => $order->branch_id,
+            'branch' => $branch,
             'action' => 'sales_order_created',
             'table_name' => 'orders',
             'record_id' => $order->id,
@@ -758,32 +772,40 @@ return response()->json([
         /* ================= ORDER DETAILS + FIFO INVENTORY ================= */
         foreach ($request->order_details as $detail) {
 
-            $product = Product::lockForUpdate()->find($detail['product_id']);
-            $qty = $detail['quantity'];
+            $product = Product::lockForUpdate()->findOrFail($detail['product_id']);
+            $qty = (int) $detail['quantity'];
 
-            /* ---- STOCK CHECK (FIFO SAFE) ---- */
+            /* ---- FIFO STOCK CHECK ---- */
             $availableStock = DB::table('inventory_transactions')
                 ->where('product_id', $product->id)
-                ->where('branch', $order->branch_id)
+                ->where('branch', $branch)
                 ->where('remaining_qty', '>', 0)
                 ->lockForUpdate()
                 ->sum('remaining_qty');
 
             if ($availableStock < $qty) {
+                Log::error('Insufficient stock', [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'branch' => $branch,
+                    'requested_qty' => $qty,
+                    'available_qty' => $availableStock,
+                ]);
+
                 throw new \Exception("Insufficient stock for {$product->name}");
             }
 
-            /* ---- PRICE / DISCOUNT ---- */
+            /* ---- DISCOUNT ---- */
             $discount = ($product->discount_type === 'percent')
                 ? ($product->price * $product->discount / 100)
-                : $product->discount;
+                : ($product->discount ?? 0);
 
             $priceAfterDiscount = $product->price - $discount;
 
             /* ---- TAX ---- */
             $taxAmount = ($product->tax_type === 'percent')
                 ? ($priceAfterDiscount * $product->tax / 100)
-                : $product->tax;
+                : ($product->tax ?? 0);
 
             $lineTotal = $priceAfterDiscount * $qty;
             $subTotal += $lineTotal;
@@ -796,11 +818,12 @@ return response()->json([
                 'price' => $product->price,
                 'quantity' => $qty,
                 'discount_on_product' => $discount,
-                'discount_type' => $product->discount_type,
+                'discount_type' => $product->discount_type ?? 'amount',
                 'tax_amount' => $taxAmount,
                 'product_details' => json_encode($product),
-                'unit' => $product->unit,
-                'vat_status' => $product->tax_type,
+                'unit' => $product->unit ?? 'pc',
+                'vat_status' => $product->tax_type ?? 'excluded',
+                'variation' => $product->variations ?? '[]',
             ]);
 
             /* ---- FIFO INVENTORY OUT ---- */
@@ -808,7 +831,7 @@ return response()->json([
 
             $batches = DB::table('inventory_transactions')
                 ->where('product_id', $product->id)
-                ->where('branch', $order->branch_id)
+                ->where('branch', $branch)
                 ->where('remaining_qty', '>', 0)
                 ->orderBy('created_at')
                 ->lockForUpdate()
@@ -821,7 +844,7 @@ return response()->json([
 
                 DB::table('inventory_transactions')->insert([
                     'product_id' => $product->id,
-                    'branch' => $order->branch_id,
+                    'branch' => $branch,
                     'type' => 'OUT',
                     'quantity' => $take,
                     'unit_price' => $batch->unit_price,
@@ -844,7 +867,7 @@ return response()->json([
             }
         }
 
-        /* ================= ORDER TOTAL ================= */
+        /* ================= UPDATE ORDER TOTAL ================= */
         $order->update([
             'order_amount' => $subTotal,
             'total_tax_amount' => $totalTax,
@@ -853,7 +876,7 @@ return response()->json([
         /* ================= GST LEDGER (OUTPUT) ================= */
         if ($totalTax > 0) {
             DB::table('gst_ledgers')->insert([
-                'branch' => $order->branch_id,
+                'branch' => $branch,
                 'type' => 'OUTPUT',
                 'taxable_amount' => $subTotal,
                 'gst_amount' => $totalTax,
@@ -865,7 +888,7 @@ return response()->json([
 
         /* ================= STORE LEDGER (RECEIVABLE) ================= */
         DB::table('store_ledgers')->insert([
-            'store_id' => $order->store_id,
+            'store_id' => $store->id,
             'reference_type' => 'order',
             'reference_id' => $order->id,
             'debit' => $subTotal + $totalTax,
@@ -899,7 +922,6 @@ return response()->json([
         ], 500);
     }
 }
-
 
 
 
