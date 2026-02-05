@@ -319,11 +319,22 @@
 </td>
 @if(in_array($order->order_status, ['returned','partial_delivered']))
 <td class="text-center">
+
     <input type="checkbox"
            class="return-checkbox"
-           value="{{ $detail->id }}">
+           data-detail-id="{{ $detail->id }}"
+           data-max-qty="{{ $detail->quantity }}">
+
+    <input type="number"
+           class="form-control mt-1 return-qty"
+           min="1"
+           max="{{ $detail->quantity }}"
+           value="{{ $detail->quantity }}"
+           style="width:70px;margin:auto;">
+
 </td>
 @endif
+
 
 
                                             </td>
@@ -338,26 +349,24 @@
                                     </td>
                                 </tr>
                             </table>
-                            @if(in_array($order->order_status, ['returned','partial_delivered']))
-<div class="text-right mt-3">
+                          @if(in_array($order->order_status, ['returned','partial_delivered']))
+<div class="text-right mt-3" id="return-action-buttons">
 
-    <button class="btn btn-danger"
-        onclick="processSelectedReturns('damaged')">
+    <button class="btn btn-danger return-action" data-reason="damaged">
         Damaged
     </button>
 
-    <button class="btn btn-warning"
-        onclick="processSelectedReturns('expired')">
+    <button class="btn btn-warning return-action" data-reason="expired">
         Expired
     </button>
 
-    <button class="btn btn-success"
-        onclick="processSelectedReturns('restock')">
+    <button class="btn btn-success return-action" data-reason="restock">
         Restock
     </button>
 
 </div>
 @endif
+
 
                         </div>
 
@@ -1442,41 +1451,7 @@
             verify_offline_payment(status);
         });
 
-       function processSelectedReturns(reason) {
-
-    let selected = [];
-
-    document.querySelectorAll('.return-checkbox:checked')
-        .forEach(cb => selected.push(cb.value));
-
-    if(selected.length === 0){
-        alert("Select items first");
-        return;
-    }
-
-    if(!confirm("Generate credit note?")) return;
-
-    fetch("{{ route('admin.orders.credit-note.create') }}", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-TOKEN": "{{ csrf_token() }}"
-        },
-        body: JSON.stringify({
-            order_id: {{ $order->id }},
-            reason: reason,
-            items: selected.map(id => ({
-                detail_id: id,
-                qty: 1
-            }))
-        })
-    })
-    .then(res => res.json())
-    .then(() => {
-        alert("Credit note created");
-        location.reload();
-    });
-}
+      
 
 
 
@@ -1575,6 +1550,67 @@
                 ProgressBar: true
             });
         }
+       
+        // ================= RETURN / CREDIT NOTE UI =================
+
+document.querySelectorAll('.return-action').forEach(button => {
+
+    button.addEventListener('click', function () {
+
+        const reason = this.dataset.reason;
+        let items = [];
+
+        document.querySelectorAll('.return-checkbox:checked').forEach(cb => {
+            const qtyInput = cb.closest('td').querySelector('.return-qty');
+
+            items.push({
+                detail_id: cb.dataset.detailId,
+                qty: parseInt(qtyInput.value)
+            });
+        });
+
+        if (items.length === 0) {
+            alert("Please select items first");
+            return;
+        }
+
+        if (!confirm("Generate credit note for selected items?")) {
+            return;
+        }
+
+        document.querySelectorAll('.return-action').forEach(btn => btn.disabled = true);
+
+        fetch("{{ route('admin.orders.returns.process') }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN": "{{ csrf_token() }}"
+            },
+            body: JSON.stringify({
+                order_id: {{ $order->id }},
+                reason: reason,
+                items: items
+            })
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (res.status) {
+                alert("Credit note generated successfully");
+                location.reload();
+            } else {
+                alert(res.message || "Failed to process return");
+                document.querySelectorAll('.return-action').forEach(btn => btn.disabled = false);
+            }
+        })
+        .catch(() => {
+            alert("Server error");
+            document.querySelectorAll('.return-action').forEach(btn => btn.disabled = false);
+        });
+    });
+
+});
+
+
 
         $(document).on('change', '#from_date', function() {
             var id = $(this).attr("data-id");

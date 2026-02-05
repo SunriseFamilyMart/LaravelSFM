@@ -564,9 +564,10 @@ Route::post(
     [OrderController::class, 'createCreditNote']
 )->name('orders.credit-note');
 
-Route::post('/admin/orders/return', 
-    [App\Http\Controllers\Admin\OrderController::class, 'returnOrderItem']
-)->name('orders.return');
+Route::post('/orders/returns/process', [
+    \App\Http\Controllers\Admin\OrderReturnController::class,
+    'process'
+])->name('admin.orders.returns.process');
 
 
 Route::group([
