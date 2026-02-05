@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\Order;
 use App\Models\OrderDetail;
@@ -22,6 +22,11 @@ class OrderReturnController extends Controller
 {
     public function process(Request $request)
     {
+        // 🔴 IMPORTANT: JSON FIX
+        if ($request->isJson()) {
+            $request->merge(json_decode($request->getContent(), true));
+        }
+
         $request->validate([
             'order_id' => 'required|exists:orders,id',
             'reason'   => 'required|in:damaged,expired,restock',
@@ -34,45 +39,48 @@ class OrderReturnController extends Controller
 
         try {
 
-            $order = Order::with(['details', 'store'])->findOrFail($request->order_id);
+            /* ================= ORDER LOCK ================= */
+            $order = Order::lockForUpdate()
+                ->with('details')
+                ->findOrFail($request->order_id);
 
             if (!in_array($order->order_status, ['returned', 'partial_delivered'])) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Order status not eligible'
-                ], 422);
+                throw new \Exception('Order not eligible for return');
             }
 
             $branch = $order->branch;
-            $totalTaxable = 0;
-            $totalGST = 0;
 
-            // ================= CREATE CREDIT NOTE =================
+            /* ================= CREATE CREDIT NOTE ================= */
             $creditNote = CreditNote::create([
-                'credit_note_no' => 'CN-' . time(),
+                'credit_note_no' => 'CN-' . now()->format('YmdHis') . rand(100, 999),
                 'order_id'       => $order->id,
                 'branch'         => $branch,
                 'customer_id'    => $order->user_id,
                 'reason'         => $request->reason,
-                'created_at'     => now()
+                'created_at'     => now(),
             ]);
 
+            $totalTaxable = 0;
+            $totalGST = 0;
+
+            /* ================= PROCESS ITEMS ================= */
             foreach ($request->items as $item) {
 
-                $detail = OrderDetail::with('product')->findOrFail($item['detail_id']);
+                $detail = OrderDetail::lockForUpdate()->findOrFail($item['detail_id']);
 
-                // Prevent double processing
-                $changeLog = OrderChangeLog::where('order_detail_id', $detail->id)
-                    ->where('processed', 1)
-                    ->first();
-
-                if ($changeLog) {
+                // Idempotency guard
+                if (OrderChangeLog::where('order_detail_id', $detail->id)
+                    ->where('processed', 1)->exists()) {
                     throw new \Exception('Item already processed');
                 }
 
                 $qty = min($item['qty'], $detail->quantity);
                 $price = $detail->price;
-                $gstPercent = $detail->tax_percent;
+
+                // Derive GST %
+                $gstPercent = $detail->tax_amount > 0
+                    ? round(($detail->tax_amount / ($detail->price * $detail->quantity)) * 100, 2)
+                    : 0;
 
                 $taxable = $price * $qty;
                 $gstAmount = ($taxable * $gstPercent) / 100;
@@ -80,7 +88,7 @@ class OrderReturnController extends Controller
                 $totalTaxable += $taxable;
                 $totalGST += $gstAmount;
 
-                // ================= CREDIT NOTE ITEM =================
+                /* ---------- CREDIT NOTE ITEM ---------- */
                 CreditNoteItem::create([
                     'credit_note_id' => $creditNote->id,
                     'product_id'     => $detail->product_id,
@@ -89,36 +97,22 @@ class OrderReturnController extends Controller
                     'gst_percent'    => $gstPercent,
                 ]);
 
-                // ================= INVENTORY =================
-                if ($request->reason === 'restock') {
-                    InventoryTransaction::create([
-                        'product_id'   => $detail->product_id,
-                        'branch'       => $branch,
-                        'type'         => 'IN',
-                        'quantity'     => $qty,
-                        'unit_price'   => $price,
-                        'total_value'  => $taxable,
-                        'reference_type' => 'credit_note',
-                        'reference_id' => $creditNote->id,
-                        'order_id'     => $order->id,
-                        'created_at'   => now(),
-                    ]);
-                } else {
-                    InventoryTransaction::create([
-                        'product_id'   => $detail->product_id,
-                        'branch'       => $branch,
-                        'type'         => 'OUT',
-                        'quantity'     => $qty,
-                        'unit_price'   => $price,
-                        'total_value'  => $taxable,
-                        'reference_type' => 'damage',
-                        'reference_id' => $creditNote->id,
-                        'order_id'     => $order->id,
-                        'created_at'   => now(),
-                    ]);
-                }
+                /* ---------- INVENTORY ---------- */
+                InventoryTransaction::create([
+                    'product_id'    => $detail->product_id,
+                    'branch'        => $branch,
+                    'type'          => $request->reason === 'restock' ? 'IN' : 'OUT',
+                    'quantity'      => $qty,
+                    'unit_price'    => $price,
+                    'total_value'   => $taxable,
+                    'remaining_qty' => $request->reason === 'restock' ? $qty : 0,
+                    'reference_type'=> 'credit_note',
+                    'reference_id'  => $creditNote->id,
+                    'order_id'      => $order->id,
+                    'created_at'    => now(),
+                ]);
 
-                // ================= ORDER CHANGE LOG =================
+                /* ---------- ORDER CHANGE LOG ---------- */
                 OrderChangeLog::create([
                     'order_id'        => $order->id,
                     'order_detail_id' => $detail->id,
@@ -133,52 +127,59 @@ class OrderReturnController extends Controller
                 ]);
             }
 
-            // ================= UPDATE CREDIT NOTE TOTAL =================
+            /* ================= UPDATE CREDIT NOTE ================= */
             $creditNote->update([
                 'taxable_amount' => $totalTaxable,
                 'gst_amount'     => $totalGST,
                 'total_amount'   => $totalTaxable + $totalGST,
             ]);
 
-            // ================= GST REVERSAL =================
+            /* ================= GST REVERSAL ================= */
             GstLedger::create([
-                'branch'          => $branch,
-                'type'            => 'OUTPUT',
-                'taxable_amount'  => -$totalTaxable,
-                'gst_amount'      => -$totalGST,
-                'reference_type'  => 'credit_note',
-                'reference_id'    => $creditNote->id,
-                'created_at'      => now(),
+                'branch'         => $branch,
+                'type'           => 'OUTPUT',
+                'taxable_amount' => -$totalTaxable,
+                'gst_amount'     => -$totalGST,
+                'reference_type' => 'credit_note',
+                'reference_id'   => $creditNote->id,
+                'created_at'     => now(),
             ]);
 
-            // ================= PAYMENT REVERSAL =================
+            /* ================= PAYMENT REVERSAL ================= */
             if ($order->paid_amount > 0) {
+                $reverse = min($order->paid_amount, $creditNote->total_amount);
+
                 PaymentLedger::create([
                     'store_id'      => $order->store_id,
                     'order_id'      => $order->id,
-                    'entry_type'    => 'CREDIT',
-                    'amount'        => $creditNote->total_amount,
+                    'entry_type'    => 'DEBIT',
+                    'amount'        => $reverse,
                     'payment_method'=> 'credit_note',
-                    'remarks'       => 'Return credit note',
+                    'remarks'       => 'Return reversal',
                     'created_at'    => now(),
                 ]);
+
+                $order->paid_amount -= $reverse;
+                $order->payment_status = $order->paid_amount > 0 ? 'partial' : 'unpaid';
+                $order->save();
             }
 
-            // ================= STORE LEDGER =================
+            /* ================= STORE LEDGER ================= */
             StoreLedger::create([
                 'store_id'       => $order->store_id,
                 'reference_type' => 'credit_note',
                 'reference_id'   => $creditNote->id,
+                'debit'          => 0,
                 'credit'         => $creditNote->total_amount,
-                'remarks'        => 'Return adjustment',
+                'remarks'        => 'Return credit note',
                 'created_at'     => now(),
             ]);
 
-            // ================= AUDIT LOG =================
+            /* ================= AUDIT LOG ================= */
             AuditLog::create([
                 'user_id'    => auth()->id(),
                 'branch'     => $branch,
-                'action'     => 'RETURN_PROCESSED',
+                'action'     => 'ORDER_RETURN_PROCESSED',
                 'table_name' => 'credit_notes',
                 'record_id'  => $creditNote->id,
                 'new_values' => json_encode($request->all()),
@@ -191,11 +192,15 @@ class OrderReturnController extends Controller
 
             return response()->json([
                 'status' => true,
-                'credit_note_id' => $creditNote->id
+                'credit_note_id' => $creditNote->id,
             ]);
 
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            Log::error('ORDER RETURN FAILED', [
+                'error' => $e->getMessage()
+            ]);
 
             return response()->json([
                 'status' => false,
