@@ -21,6 +21,7 @@ class Store extends Model
         'gst_number',
         'route_name',
         'street_address',
+        'branch',
         'area',
         'city',
         'taluk',
