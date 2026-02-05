@@ -18,7 +18,7 @@ use App\Models\GstLedger;
 use App\Models\PaymentLedger;
 use App\Models\StoreLedger;
 use App\Models\AuditLog;
-use App\Models\Branch;
+use App\Model\Branch;
 
 class OrderReturnController extends Controller
 {
