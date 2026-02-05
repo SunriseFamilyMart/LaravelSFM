@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 use App\Model\Order;
 use App\Model\OrderDetail;
-use App\Model\OrderChangeLog;
+use App\Models\OrderChangeLog;
 
 use App\Models\InventoryTransaction;
 use App\Models\CreditNote;
