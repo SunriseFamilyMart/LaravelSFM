@@ -820,7 +820,17 @@ return response()->json([
                 'discount_on_product' => $discount,
                 'discount_type' => $product->discount_type ?? 'amount',
                 'tax_amount' => $taxAmount,
-                'product_details' => json_encode($product),
+              //  'product_details' => json_encode($product),
+                'product_details' => [
+    'id' => $product->id,
+    'name' => $product->name,
+    'image' => json_decode($product->image, true),
+    'unit' => $product->unit,
+    'price' => $product->price,
+    'tax' => $product->tax,
+    'tax_type' => $product->tax_type,
+],
+
                 'unit' => $product->unit ?? 'pc',
                 'vat_status' => $product->tax_type ?? 'excluded',
                 'variation' => $product->variations ?? '[]',
