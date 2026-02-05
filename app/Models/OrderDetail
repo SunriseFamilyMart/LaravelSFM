@@ -1,0 +1,51 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class OrderDetail extends Model
+{
+    protected $fillable = [
+        'product_id',
+        'order_id',
+        'price',
+        'product_details',
+        'variation',
+        'discount_on_product',
+        'discount_type',
+        'quantity',
+        'tax_amount',
+        'variant',
+        'unit',
+        'is_stock_decreased',
+        'time_slot_id',
+        'delivery_date',
+        'vat_status',
+        'invoice_number',
+        'expected_date',
+        'order_user',
+    ];
+
+    protected $casts = [
+        'product_id' => 'integer',
+        'order_id' => 'integer',
+        'price' => 'float',
+        'discount_on_product' => 'float',
+        'quantity' => 'integer',
+        'tax_amount' => 'float',
+        'is_stock_decreased' => 'boolean',
+        'time_slot_id' => 'integer',
+        'product_details' => 'array',
+    ];
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class);
+    }
+}
