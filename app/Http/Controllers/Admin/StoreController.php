@@ -8,9 +8,67 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Model\Conversation;
 use App\Models\SalesPerson;
+use Illuminate\Support\Facades\DB;
 
 class StoreController extends Controller
 {
+
+    /**
+     * Pending store self-registrations (needs admin approval + salesperson assignment).
+     */
+    public function pendingSelf(Request $request)
+    {
+        $query = Store::query()
+            ->where('registration_source', 'self')
+            ->where('approval_status', 'pending');
+
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('store_name', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('phone_number', 'like', "%{$search}%");
+            });
+        }
+
+        $stores = $query->latest()->paginate(10)->appends(['search' => $request->search]);
+        $salesPeople = SalesPerson::orderBy('name')->get();
+
+        return view('stores.pending_self', compact('stores', 'salesPeople'));
+    }
+
+    /**
+     * Approve a self-registered store and assign salesperson.
+     */
+    public function approveSelf(Request $request, Store $store)
+    {
+        $request->validate([
+            'sales_person_id' => 'required|exists:sales_people,id',
+        ]);
+
+        $store->sales_person_id = (int) $request->sales_person_id;
+        $store->approval_status = 'approved';
+        $store->can_login = true;
+        $store->approved_by = auth('admin')->id();
+        $store->approved_at = now();
+        $store->save();
+
+        return redirect()->back()->with('success', 'Store approved and salesperson assigned.');
+    }
+
+    /**
+     * Reject a self-registered store.
+     */
+    public function rejectSelf(Request $request, Store $store)
+    {
+        $store->approval_status = 'rejected';
+        $store->can_login = false;
+        $store->approved_by = auth('admin')->id();
+        $store->approved_at = now();
+        $store->save();
+
+        return redirect()->back()->with('success', 'Store rejected.');
+    }
 
 
     public function updateSalesPerson(Request $request, Store $store)
