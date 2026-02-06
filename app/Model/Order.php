@@ -8,6 +8,7 @@ use App\Models\OrderArea;
 use App\Models\OrderImage;
 use App\Models\OrderPartialPayment;
 use App\User;
+use App\Models\CreditNote;
 use App\Models\SalesPerson;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Store;
@@ -163,6 +164,14 @@ class Order extends Model
     {
         return $this->hasMany(OrderDetail::class, 'order_id', 'id');
     }
+
+  
+
+public function creditNotes()
+{
+    return $this->hasMany(CreditNote::class, 'order_id');
+}
+
 
 
 }
