@@ -9,6 +9,8 @@ use App\Http\Controllers\Admin\WalletBonusController;
 use App\Http\Controllers\Admin\OfflinePaymentMethodController;
 use App\Http\Controllers\Admin\AttributeController;
 use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\OrderReturnController;
+use App\Http\Controllers\Admin\CreditNoteController;
 use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Admin\BusinessSettingsController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -57,6 +59,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
     });
 
     Route::group(['middleware' => ['admin', 'employee_active_check']], function () {
+        
+Route::get('credit-note/{id}', [CreditNoteController::class, 'show'])
+    ->name('admin.credit-note.show');
+
+Route::get('credit-note/{id}/pdf', [CreditNoteController::class, 'pdf'])
+    ->name('admin.credit-note.pdf');
+
         Route::resource('sales-person', SalesPersonController::class);
         Route::resource('inventories', InventoryController::class);
         Route::post('inventories/reset-password', [InventoryController::class, 'resetPassword'])
@@ -220,10 +229,10 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
-            Route::post(
-    'returns/process',
-    [\App\Http\Controllers\Admin\OrderReturnController::class, 'process']
-)->name('returns.process');
+             Route::post(
+                'returns/process',
+                [OrderReturnController::class, 'process']
+            )->name('returns.process');
             Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
             Route::post('return', [OrderController::class, 'returnOrderItem'])->name('return');
             Route::get('status', [OrderController::class, 'status'])->name('status');
@@ -563,25 +572,6 @@ Route::get('/admin/report/sale-report/export', [ReportController::class, 'export
     ->name('admin.report.sales.export');
 
 
-Route::post(
-    '/orders/credit-note',
-    [OrderController::class, 'createCreditNote']
-)->name('orders.credit-note');
-
-
-
-Route::group([
-    'prefix' => 'admin',
-    'as' => 'admin.',
-    'middleware' => ['admin']
-], function () {
-
-    Route::post(
-        '/orders/credit-note/create',
-        [OrderController::class, 'createCreditNote']
-    )->name('orders.credit-note.create');
-
-});
 
 
        

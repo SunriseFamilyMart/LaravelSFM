@@ -129,7 +129,7 @@
                                     href={{ route('admin.orders.generate-invoice', [$order['id']]) }}>
                                     <i class="tio-print mr-1"></i> {{ translate('print') }} {{ translate('invoice') }}
                                 </a>
-                                @if($order->creditNotes && $order->creditNotes->count())
+                               @if($order->creditNotes?->isNotEmpty())
                                     <a class="btn btn-warning" target="_blank"
                                         href="{{ route('admin.credit-note.show', $order->creditNotes->first()->id) }}">
                                         <i class="tio-receipt"></i> Credit Note
@@ -329,14 +329,11 @@
            class="form-control mt-1 return-qty"
            min="1"
            max="{{ $detail->quantity }}"
-           value="{{ $detail->quantity }}"
+           value="1"
            style="width:70px;margin:auto;">
 
 </td>
 @endif
-
-
-
                                             </td>
                                             
 
@@ -363,52 +360,21 @@
     <button class="btn btn-success return-action" data-reason="restock">
         Restock
     </button>
-    @if($order->creditNotes->count())
-<div class="card mt-3">
-    <div class="card-header">
-        <h5 class="mb-0">Credit Notes</h5>
-    </div>
 
-    <div class="card-body p-2">
-        <table class="table table-sm table-bordered text-center mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>#</th>
-                    <th>Credit Note No</th>
-                    <th>Reason</th>
-                    <th>Total</th>
-                    <th>GST</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($order->creditNotes as $note)
-                <tr>
-                    <td>{{ $loop->iteration }}</td>
-                    <td>{{ $note->credit_note_no }}</td>
-                    <td>{{ ucfirst($note->reason) }}</td>
-                    <td>{{ Helpers::set_symbol($note->total_amount) }}</td>
-                    <td>{{ Helpers::set_symbol($note->gst_amount) }}</td>
-                    <td>
-                        <a href="{{ route('admin.credit-note.show', $note->id) }}"
-                           class="btn btn-info btn-sm" target="_blank">
-                            View
-                        </a>
+    @if($order->creditNotes?->isNotEmpty())
+        @php($note = $order->creditNotes->last())
+        <a class="btn btn-info" target="_blank"
+           href="{{ route('admin.credit-note.show', $note->id) }}">
+            View Credit Note (GST)
+        </a>
 
-                        <a href="{{ route('admin.credit-note.pdf', $note->id) }}"
-                           class="btn btn-success btn-sm" target="_blank">
-                            PDF
-                        </a>
-                    </td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
+        <a class="btn btn-primary" target="_blank"
+           href="{{ route('admin.credit-note.pdf', $note->id) }}">
+            Download PDF
+        </a>
+    @endif
 </div>
 @endif
-
-
 </div>
 @endif
 
@@ -1598,24 +1564,31 @@
        
         // ================= RETURN / CREDIT NOTE UI =================
 
+        let returnLocked = false;
+
 document.querySelectorAll('.return-action').forEach(button => {
 
     button.addEventListener('click', function () {
+
+        if (returnLocked) return;
 
         const reason = this.dataset.reason;
         let items = [];
 
         document.querySelectorAll('.return-checkbox:checked').forEach(cb => {
             const qtyInput = cb.closest('td').querySelector('.return-qty');
+            const qty = parseInt(qtyInput.value);
 
-            items.push({
-                detail_id: cb.dataset.detailId,
-                qty: parseInt(qtyInput.value)
-            });
+            if (qty > 0) {
+                items.push({
+                    detail_id: cb.dataset.detailId,
+                    qty: qty
+                });
+            }
         });
 
         if (items.length === 0) {
-            alert("Please select items first");
+            alert("Please select at least one item");
             return;
         }
 
@@ -1623,7 +1596,12 @@ document.querySelectorAll('.return-action').forEach(button => {
             return;
         }
 
+        // 🔒 LOCK UI (IMPORTANT)
+        returnLocked = true;
+
         document.querySelectorAll('.return-action').forEach(btn => btn.disabled = true);
+        document.querySelectorAll('.return-checkbox').forEach(el => el.disabled = true);
+        document.querySelectorAll('.return-qty').forEach(el => el.disabled = true);
 
         fetch("{{ route('admin.orders.returns.process') }}", {
             method: "POST",
@@ -1644,17 +1622,24 @@ document.querySelectorAll('.return-action').forEach(button => {
                 location.reload();
             } else {
                 alert(res.message || "Failed to process return");
-                document.querySelectorAll('.return-action').forEach(btn => btn.disabled = false);
+                returnLocked = false;
+                enableReturnUI();
             }
         })
         .catch(() => {
             alert("Server error");
-            document.querySelectorAll('.return-action').forEach(btn => btn.disabled = false);
+            returnLocked = false;
+            enableReturnUI();
         });
     });
 
 });
 
+function enableReturnUI() {
+    document.querySelectorAll('.return-action').forEach(btn => btn.disabled = false);
+    document.querySelectorAll('.return-checkbox').forEach(el => el.disabled = false);
+    document.querySelectorAll('.return-qty').forEach(el => el.disabled = false);
+}
 
 
         $(document).on('change', '#from_date', function() {

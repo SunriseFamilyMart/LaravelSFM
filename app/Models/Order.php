@@ -131,4 +131,10 @@ class Order extends Model
     {
         return $query->where('order_status', $status);
     }
+
+    public function creditNotes()
+{
+    return $this->hasMany(\App\Models\CreditNote::class, 'order_id');
+}
+
 }
