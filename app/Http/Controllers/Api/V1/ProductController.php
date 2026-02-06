@@ -45,10 +45,9 @@ class ProductController extends Controller
      */
   public function getAllProducts(Request $request): JsonResponse
 {
-    \Log::info('AUTH USER DEBUG', [
-    'user_id' => auth('api')->id(),
-    'user'    => auth('api')->user(),
-    'guard'   => auth()->getDefaultDriver(),
+   \Log::info('PRODUCT REQUEST', [
+    'user_id'  => $request->user_id,
+    'store_id' => $request->store_id,
 ]);
 
     $validator = Validator::make($request->all(), [
