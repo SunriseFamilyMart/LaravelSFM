@@ -317,9 +317,8 @@
                                                 @php($subTotal += $price_after_discount)
     <h5>{{ Helpers::set_symbol($detail['price'] * $detail['quantity'] - $detail['discount_on_product'] * $detail['quantity']) }}</h5>
 </td>
-@if(in_array($order->order_status, ['returned','partial_delivered']))
 <td class="text-center">
-
+@if(in_array($order->order_status, ['returned','partial_delivered']))
     <input type="checkbox"
            class="return-checkbox"
            data-detail-id="{{ $detail->id }}"
@@ -331,11 +330,8 @@
            max="{{ $detail->quantity }}"
            value="1"
            style="width:70px;margin:auto;">
-
-</td>
 @endif
-                                            </td>
-                                            
+</td>                
 
                                         </tr>
                                     @endif
@@ -346,7 +342,7 @@
                                     </td>
                                 </tr>
                             </table>
-                          @if(in_array($order->order_status, ['returned','partial_delivered']))
+                           @if(in_array($order->order_status, ['returned','partial_delivered']))
 <div class="text-right mt-3" id="return-action-buttons">
 
     <button class="btn btn-danger return-action" data-reason="damaged">
@@ -373,8 +369,6 @@
             Download PDF
         </a>
     @endif
-</div>
-@endif
 </div>
 @endif
 
