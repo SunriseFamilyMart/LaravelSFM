@@ -63,67 +63,92 @@ class Helpers
 
 
 
-   public static function product_data_formatting($data, $multi_data = false)
+  public static function product_data_formatting($data, $multi_data = false)
 {
-    \Log::info('PDF START', [
+    \Log::info('PDF ENTRY', [
         'multi_data' => $multi_data,
         'data_type'  => gettype($data),
-        'data_count' => is_countable($data) ? count($data) : 'N/A',
+        'count'      => is_countable($data) ? count($data) : null,
     ]);
 
     $storage = [];
 
-    // 🔥 HARD-CODED BRANCH
-   // $branch = 'Nelamangala';
     if ($multi_data === true) {
 
         foreach ($data as $index => $item) {
 
-            \Log::info('PDF LOOP START', [
-                'index'      => $index,
-                'product_id' => $item['id'] ?? 'NO_ID'
+            \Log::info('PDF PRODUCT RAW', [
+                'index' => $index,
+                'id'    => $item['id'] ?? null,
+                'moq_column_exists' => is_array($item) && array_key_exists('minimum_order_quantity', $item),
+                'moq_raw_value'     => $item['minimum_order_quantity'] ?? 'NOT_SET',
             ]);
 
-            // ===== JSON DECODE (OLD WORKING LOGIC) =====
-            $item['category_ids']   = json_decode($item['category_ids']);
-$item['image']          = json_decode($item['image']);
-$item['attributes']     = json_decode($item['attributes']);
-$item['choice_options'] = json_decode($item['choice_options']);
+            // ===== JSON DECODE =====
+            $item['category_ids']   = json_decode($item['category_ids'] ?? '[]');
+            $item['image']          = json_decode($item['image'] ?? '[]');
+            $item['attributes']     = json_decode($item['attributes'] ?? '[]');
+            $item['choice_options'] = json_decode($item['choice_options'] ?? '[]');
 
-// 🔥 HARD-CODED BRANCH + MOQ FIX
-$branch = 'Nelamangala';
+            // ===== BRANCH (TEMP – FOR LOGGING) =====
+            $branch = 'Nelamangala';
 
-$item['stock'] = (int) \DB::table('inventory_transactions')
-    ->where('product_id', $item['id'])
-    ->whereRaw('TRIM(UPPER(branch)) = TRIM(UPPER(?))', [$branch])
-    ->sum('remaining_qty');
+            // ===== STOCK QUERY WITH LOG =====
+            $stockQuery = \DB::table('inventory_transactions')
+                ->where('product_id', $item['id'])
+                ->whereRaw('TRIM(UPPER(branch)) = TRIM(UPPER(?))', [$branch]);
 
-     $item['minimum_order_quantity'] = isset($item['minimum_order_quantity'])
-    ? (int) $item['minimum_order_quantity']
-    : (int) (\DB::table('products')->where('id', $item['id'])->value('minimum_order_quantity') ?? 1);
+            \Log::info('PDF STOCK QUERY', [
+                'product_id' => $item['id'],
+                'branch_used' => $branch,
+                'rows_found' => $stockQuery->count(),
+            ]);
 
-$item['maximum_order_quantity'] = isset($item['maximum_order_quantity'])
-    ? (int) $item['maximum_order_quantity']
-    : (int) (\DB::table('products')->where('id', $item['id'])->value('maximum_order_quantity') ?? 0);
+            $item['stock'] = (int) $stockQuery->sum('remaining_qty');
+
+            \Log::info('PDF STOCK RESULT', [
+                'product_id' => $item['id'],
+                'stock'      => $item['stock'],
+            ]);
+
+            // ===== MOQ FIX + LOG =====
+            $dbMoq = \DB::table('products')
+                ->where('id', $item['id'])
+                ->value('minimum_order_quantity');
+
+            $item['minimum_order_quantity'] = (int) (
+                $item['minimum_order_quantity']
+                ?? $dbMoq
+                ?? 1
+            );
+
+            $item['maximum_order_quantity'] = (int) (
+                $item['maximum_order_quantity']
+                ?? \DB::table('products')
+                    ->where('id', $item['id'])
+                    ->value('maximum_order_quantity')
+                ?? 0
+            );
+
+            \Log::info('PDF MOQ FINAL', [
+                'product_id'   => $item['id'],
+                'moq_from_db'  => $dbMoq,
+                'moq_final'    => $item['minimum_order_quantity'],
+            ]);
+
             // ===== CATEGORY =====
-            $categories = is_array($item['category_ids'])
-                ? $item['category_ids']
-                : json_decode($item['category_ids']);
-
-            \Log::info('PDF CATEGORIES', [
-                'product_id'     => $item['id'],
-                'category_count' => is_countable($categories) ? count($categories) : 0
-            ]);
+            $categories = $item['category_ids'];
 
             if (!is_null($categories) && count($categories) > 0) {
                 $ids = [];
                 foreach ($categories as $value) {
-                    if ($value->position == 1) {
+                    if (isset($value->position) && $value->position == 1) {
                         $ids[] = $value->id;
                     }
                 }
+
                 $item['category_discount'] =
-                    CategoryDiscount::active()
+                    \App\Model\CategoryDiscount::active()
                         ->whereIn('category_id', $ids)
                         ->first();
             } else {
@@ -132,7 +157,7 @@ $item['maximum_order_quantity'] = isset($item['maximum_order_quantity'])
 
             // ===== VARIATIONS =====
             $variations = [];
-            $decoded = json_decode($item['variations'], true);
+            $decoded = json_decode($item['variations'] ?? '[]', true);
 
             \Log::info('PDF VARIATIONS', [
                 'product_id'      => $item['id'],
@@ -164,12 +189,14 @@ $item['maximum_order_quantity'] = isset($item['maximum_order_quantity'])
             }
 
             unset($item['translations']);
-            $storage[] = $item;
 
-            \Log::info('PDF LOOP END', [
-                'product_id'    => $item['id'],
-                'storage_count' => count($storage)
+            \Log::info('PDF PRODUCT FINAL', [
+                'product_id' => $item['id'],
+                'stock'      => $item['stock'],
+                'moq'        => $item['minimum_order_quantity'],
             ]);
+
+            $storage[] = $item;
         }
 
         \Log::info('PDF END MULTI', [
