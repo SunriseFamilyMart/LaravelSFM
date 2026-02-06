@@ -61,7 +61,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
     Route::group(['middleware' => ['admin', 'employee_active_check']], function () {
         
 Route::get('credit-note/{id}', [CreditNoteController::class, 'show'])
-    ->name(credit-note.show');
+    ->name('credit-note.show');
 
 Route::get('credit-note/{id}/pdf', [CreditNoteController::class, 'pdf'])
     ->name('credit-note.pdf');
