@@ -45,14 +45,12 @@ class ProductController extends Controller
      */
   public function getAllProducts(Request $request): JsonResponse
 {
-  \Log::info('PRODUCTS API HIT', [
-    'headers' => [
-        'authorization' => $request->header('authorization'),
-        'store_id'      => $request->header('store_id'),
-        'user_id'       => $request->header('user_id'),
-    ],
-    'query_params' => $request->all(),
+  \Log::info('PRODUCT REQUEST', [
+    'user_id'  => $request->header('user_id'),
+    'store_id' => $request->header('store_id'),
+    'token'    => $request->bearerToken(),
 ]);
+
     $validator = Validator::make($request->all(), [
         'store_id' => 'required|exists:stores,id',
         'sort_by'  => 'nullable|in:latest,popular,recommended,trending',
