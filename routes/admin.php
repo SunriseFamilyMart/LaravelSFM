@@ -61,10 +61,10 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
     Route::group(['middleware' => ['admin', 'employee_active_check']], function () {
         
 Route::get('credit-note/{id}', [CreditNoteController::class, 'show'])
-    ->name('admin.credit-note.show');
+    ->name(credit-note.show');
 
 Route::get('credit-note/{id}/pdf', [CreditNoteController::class, 'pdf'])
-    ->name('admin.credit-note.pdf');
+    ->name('credit-note.pdf');
 
         Route::resource('sales-person', SalesPersonController::class);
         Route::resource('inventories', InventoryController::class);
