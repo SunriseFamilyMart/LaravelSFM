@@ -74,12 +74,7 @@ class Helpers
     $storage = [];
 
     // 🔥 HARD-CODED BRANCH
-    $branch = 'Nelamangala';
-
-    \Log::info('PDF BRANCH FORCED', [
-        'branch' => $branch
-    ]);
-
+   // $branch = 'Nelamangala';
     if ($multi_data === true) {
 
         foreach ($data as $index => $item) {
@@ -91,33 +86,20 @@ class Helpers
 
             // ===== JSON DECODE (OLD WORKING LOGIC) =====
             $item['category_ids']   = json_decode($item['category_ids']);
-            $item['image']          = json_decode($item['image']);
-            $item['attributes']     = json_decode($item['attributes']);
-            $item['choice_options'] = json_decode($item['choice_options']);
+$item['image']          = json_decode($item['image']);
+$item['attributes']     = json_decode($item['attributes']);
+$item['choice_options'] = json_decode($item['choice_options']);
 
-            // ===== STOCK (FORCED BRANCH) =====
-            try {
-                $item['stock'] = (int) \DB::table('inventory_transactions')
-                    ->where('product_id', $item['id'])
-                    ->whereRaw(
-                        'TRIM(UPPER(BRANCH)) = TRIM(UPPER(?))',
-                        [$branch]
-                    )
-                    ->sum('remaining_qty');
+// 🔥 HARD-CODED BRANCH + MOQ FIX
+$branch = 'Nelamangala';
 
-                \Log::info('PDF STOCK RESULT', [
-                    'product_id' => $item['id'],
-                    'branch'     => $branch,
-                    'stock'      => $item['stock']
-                ]);
-            } catch (\Exception $e) {
-                \Log::error('PDF STOCK ERROR', [
-                    'product_id' => $item['id'],
-                    'error'      => $e->getMessage()
-                ]);
-                $item['stock'] = 0;
-            }
+$item['stock'] = (int) \DB::table('inventory_transactions')
+    ->where('product_id', $item['id'])
+    ->whereRaw('TRIM(UPPER(branch)) = TRIM(UPPER(?))', [$branch])
+    ->sum('remaining_qty');
 
+$item['minimum_order_quantity'] = (int) ($item['minimum_order_quantity'] ?? 1);
+$item['maximum_order_quantity'] = (int) ($item['maximum_order_quantity'] ?? 0);
             // ===== CATEGORY =====
             $categories = is_array($item['category_ids'])
                 ? $item['category_ids']
