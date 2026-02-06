@@ -71,16 +71,105 @@ class StoreController extends Controller
             ->with('success', 'Store created successfully.');
     }
 
-    public function show(Store $store)
-    {
-        // Load sales people for the dropdown (ordered nicely)
-        $salesPeople = SalesPerson::orderBy('name')->get();
+   public function show(Request $request, Store $store)
+{
+    $salesPeople = SalesPerson::orderBy('name')->get();
 
-        // Optionally eager load the relation to avoid extra queries in the view
-        $store->load('salesPerson');
+    // ---------------- FILTER INPUTS ----------------
+    $orderId  = $request->order_id;
+    $fromDate = $request->from_date;
+    $toDate   = $request->to_date;
 
-        return view('stores.show', compact('store', 'salesPeople'));
-    }
+    // ---------------- SUMMARY (FROM LEDGER ONLY) ----------------
+    $summary = DB::table('store_ledgers')
+        ->where('store_id', $store->id)
+        ->selectRaw("
+            SUM(debit)  AS total_debit,
+            SUM(credit) AS total_credit
+        ")
+        ->first();
+
+    $summary->total_order_amount = $summary->total_debit ?? 0;
+    $summary->total_paid = $summary->total_credit ?? 0;
+    $summary->outstanding_amount = max(
+        0,
+        ($summary->total_order_amount - $summary->total_paid)
+    );
+
+    // ---------------- ORDERS + PAYMENTS (LEDGER BASED) ----------------
+    $orders = DB::table('orders as o')
+        ->leftJoin('store_ledgers as sl', function ($join) {
+            $join->on('o.id', '=', 'sl.reference_id')
+                ->whereIn('sl.reference_type', ['order', 'payment', 'credit_note']);
+        })
+        ->where('o.store_id', $store->id)
+        ->when($orderId, fn($q) => $q->where('o.id', $orderId))
+        ->when($fromDate && $toDate, fn($q) =>
+            $q->whereBetween('o.created_at', [$fromDate, $toDate])
+        )
+        ->selectRaw("
+            o.id,
+            o.order_status,
+            DATE(o.created_at) AS order_date,
+
+            (COALESCE(o.order_amount,0) + COALESCE(o.total_tax_amount,0)) AS total_amount,
+
+            SUM(CASE WHEN sl.reference_type = 'order'
+                     THEN sl.debit ELSE 0 END) AS order_debit,
+
+            SUM(CASE WHEN sl.reference_type IN ('payment','credit_note')
+                     THEN sl.credit ELSE 0 END) AS total_paid
+        ")
+        ->groupBy(
+            'o.id',
+            'o.order_amount',
+            'o.total_tax_amount',
+            'o.order_status',
+            'o.created_at'
+        )
+        ->orderBy('o.created_at', 'DESC')
+        ->paginate(10, ['*'], 'orders_page')
+        ->withQueryString();
+
+    // ---------------- DERIVE PAYMENT STATUS ----------------
+    $orders->getCollection()->transform(function ($order) {
+        $order->pending_amount = max(
+            0,
+            round(($order->total_amount ?? 0) - ($order->total_paid ?? 0), 2)
+        );
+
+        if ($order->total_paid >= $order->total_amount) {
+            $order->payment_status = 'paid';
+        } elseif ($order->total_paid > 0) {
+            $order->payment_status = 'partial';
+        } else {
+            $order->payment_status = 'unpaid';
+        }
+
+        return $order;
+    });
+
+    // ---------------- ORDER ITEMS ----------------
+    $orderIds = $orders->pluck('id');
+
+    $items = DB::table('order_details')
+        ->whereIn('order_id', $orderIds)
+        ->paginate(15, ['*'], 'items_page')
+        ->withQueryString();
+
+    $items->getCollection()->transform(function ($item) {
+        $item->product = json_decode($item->product_details, true);
+        return $item;
+    });
+
+    return view('stores.show', compact(
+        'store',
+        'salesPeople',
+        'orders',
+        'items',
+        'summary'
+    ));
+}
 
     public function edit(Store $store)
     {

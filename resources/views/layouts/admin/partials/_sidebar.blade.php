@@ -172,9 +172,10 @@
                                             <span class="tio-circle nav-indicator-icon"></span>
                                             <span class="text-truncate  sidebar--badge-container">
                                                 <span>{{ translate('returned') }}</span>
-                                                <span class="badge badge-soft-danger badge-pill ml-1">
-                                                    {{ \App\Model\Order::where(['order_status' => 'returned'])->count() }}
-                                                </span>
+                                               <span class="badge badge-soft-danger badge-pill ml-1">
+    {{ \App\Model\Order::whereIn('order_status', ['returned', 'partial_delivered'])->count() }}
+</span>
+
                                             </span>
                                         </a>
                                     </li>

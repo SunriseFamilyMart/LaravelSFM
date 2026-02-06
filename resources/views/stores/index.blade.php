@@ -8,9 +8,14 @@
         {{-- Header --}}
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="fw-bold mb-0"><i class="bi bi-shop me-2"></i> Stores</h2>
-            <a href="{{ route('admin.stores.create') }}" class="btn btn-primary shadow-sm">
-                <i class="bi bi-plus-circle me-1"></i> Add Store
-            </a>
+            <div class="d-flex gap-2">
+                <a href="{{ route('admin.stores.pendingSelf') }}" class="btn btn-outline-warning shadow-sm">
+                    <i class="bi bi-shield-exclamation me-1"></i> Pending Approvals
+                </a>
+                <a href="{{ route('admin.stores.create') }}" class="btn btn-primary shadow-sm">
+                    <i class="bi bi-plus-circle me-1"></i> Add Store
+                </a>
+            </div>
         </div>
 
         {{-- Success Message --}}
@@ -43,6 +48,7 @@
                                 <th>Store Name</th>
                                 <th>Customer</th>
                                 <th>Phone</th>
+                                <th>Status</th>
                                 <th>Photo</th>
                                 <th class="text-center" style="width: 200px;">Actions</th>
                             </tr>
@@ -61,6 +67,24 @@
                                             </a>
                                         @else
                                             <span class="text-muted">N/A</span>
+                                        @endif
+                                    </td>
+
+                                    <td>
+                                        @php
+                                            $source = $store->registration_source ?? 'sales_person';
+                                            $status = $store->approval_status ?? 'approved';
+                                        @endphp
+                                        @if($source === 'self')
+                                            @if($status === 'pending')
+                                                <span class="badge bg-warning text-dark">Self • Pending</span>
+                                            @elseif($status === 'rejected')
+                                                <span class="badge bg-danger">Self • Rejected</span>
+                                            @else
+                                                <span class="badge bg-success">Self • Approved</span>
+                                            @endif
+                                        @else
+                                            <span class="badge bg-secondary">Sales Added</span>
                                         @endif
                                     </td>
 
@@ -97,7 +121,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
+                                    <td colspan="6" class="text-center text-muted py-4">
                                         <i class="bi bi-exclamation-circle me-1"></i> No stores found.
                                     </td>
                                 </tr>
