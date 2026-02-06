@@ -45,6 +45,10 @@ class ProductController extends Controller
      */
   public function getAllProducts(Request $request): JsonResponse
 {
+    \Log::info('STORE ID RECEIVED', [
+        'store_id' => $request->store_id,
+        'full_request' => $request->all(),
+    ]);
     $validator = Validator::make($request->all(), [
         'store_id' => 'required|exists:stores,id',
         'sort_by'  => 'nullable|in:latest,popular,recommended,trending',
