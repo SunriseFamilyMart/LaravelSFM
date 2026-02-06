@@ -113,56 +113,69 @@ class StoreAuthController extends Controller
      * Step 1: verify phone + password, then send OTP.
      */
     public function login(Request $request)
-    {
-        $payload = $request->validate([
-            'phone_number' => 'required|string|max:15',
-            'password' => 'required|string',
-        ]);
+{
+    $payload = $request->validate([
+        'phone_number' => 'required|string|max:15',
+        'password' => 'required|string',
+        'skip_otp' => 'nullable|boolean', // 👈 NEW
+    ]);
 
-        $phone = $payload['phone_number'];
-        if ($phone && !str_starts_with($phone, '+91')) {
-            $phone = '+91' . ltrim($phone, '0');
-        }
+    $phone = $payload['phone_number'];
+    if ($phone && !str_starts_with($phone, '+91')) {
+        $phone = '+91' . ltrim($phone, '0');
+    }
 
-        $store = Store::where('phone_number', $phone)->first();
-        if (!$store) {
-            return response()->json(['success' => false, 'message' => 'Store not found.'], 404);
-        }
+    $store = Store::where('phone_number', $phone)->first();
+    if (!$store) {
+        return response()->json(['success' => false, 'message' => 'Store not found.'], 404);
+    }
 
-        // Block login until approved + assigned
-        $approved = ($store->approval_status ?? 'pending') === 'approved';
-        $assigned = !empty($store->sales_person_id);
-        $canLogin = (bool) ($store->can_login ?? false);
-        if (!$approved || !$canLogin || !$assigned) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Account pending approval. Please wait for admin approval and salesperson assignment.',
-                'approval_status' => $store->approval_status,
-                'assigned' => !empty($store->sales_person_id),
-                'can_login' => (bool) ($store->can_login ?? false),
-            ], 403);
-        }
+    // Approval checks
+    $approved = ($store->approval_status ?? 'pending') === 'approved';
+    $assigned = !empty($store->sales_person_id);
+    $canLogin = (bool) ($store->can_login ?? false);
 
-        if (!Hash::check($payload['password'], $store->password ?? '')) {
-            return response()->json(['success' => false, 'message' => 'Invalid password.'], 401);
-        }
+    if (!$approved || !$canLogin || !$assigned) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Account pending approval.',
+        ], 403);
+    }
 
-        // Create OTP
-        $otpCode = (string) random_int(1000, 9999);
-        StoreOtp::create([
-            'phone_number' => $phone,
-            'otp' => $otpCode,
-            'expires_at' => Carbon::now()->addMinutes(5),
-        ]);
+    if (!Hash::check($payload['password'], $store->password ?? '')) {
+        return response()->json(['success' => false, 'message' => 'Invalid password.'], 401);
+    }
+
+    // ✅ PASSWORD-ONLY LOGIN
+    if (!empty($payload['skip_otp']) && $payload['skip_otp'] === true) {
+        $token = bin2hex(random_bytes(40));
+        $store->auth_token = $token;
+        $store->save();
 
         return response()->json([
             'success' => true,
-            'message' => 'OTP sent successfully',
-            'phone_number' => $phone,
-            'otp' => $otpCode, // ⚠️ For testing only. Remove for production SMS.
-            'expires_in_sec' => 300,
+            'message' => 'Login successful',
+            'token' => $token,
+            'store' => $store,
         ], 200);
     }
+
+    // 🔁 OTP FLOW (unchanged)
+    $otpCode = (string) random_int(1000, 9999);
+    StoreOtp::create([
+        'phone_number' => $phone,
+        'otp' => $otpCode,
+        'expires_at' => Carbon::now()->addMinutes(5),
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'OTP sent successfully',
+        'otp' => $otpCode, // testing only
+        'expires_in_sec' => 300,
+    ], 200);
+}
+
 
     /**
      * POST /api/v1/store/verify-otp
