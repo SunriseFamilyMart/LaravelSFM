@@ -110,8 +110,8 @@ class OrderReturnController extends Controller
             ]);
 
             /** ---------------- UPDATE ORDER DETAIL QTY ---------------- */
-            $detail->quantity -= $returnQty;
-            $detail->save();
+          //  $detail->quantity -= $returnQty;
+          //  $detail->save();
 
             /** ---------------- INVENTORY ---------------- */
             InventoryTransaction::create([
@@ -176,11 +176,13 @@ class OrderReturnController extends Controller
         }
 
         /** ---------------- ORDER STATUS ---------------- */
-        $remainingQty = $order->details()->sum('quantity');
-
+       $remainingQty = $order->details->sum(function ($detail) {
+    $returned = CreditNoteItem::where('order_detail_id', $detail->id)->sum('quantity');
+    return $detail->quantity - $returned;
+});
         $order->order_status = $remainingQty === 0
             ? 'returned'
-            : 'partial_returned';
+            : 'partial_delivered';
 
         $order->save();
 
