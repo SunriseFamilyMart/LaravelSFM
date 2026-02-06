@@ -458,7 +458,9 @@ public function storeOrder(Request $request)
             'offline_payment',
             'editLogs',
             'editLogs.deliveryMan',
-            'editLogs.orderDetail'
+            'editLogs.orderDetail',
+            'creditNotes',          // ✅ THIS IS THE FIX
+            'creditNotes.items', 
         ])
         ->find($id);
 
