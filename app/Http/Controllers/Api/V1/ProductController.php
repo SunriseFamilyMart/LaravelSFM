@@ -45,12 +45,7 @@ class ProductController extends Controller
      */
   public function getAllProducts(Request $request): JsonResponse
 {
-  \Log::info('PRODUCT REQUEST', [
-    'user_id'  => $request->header('user_id'),
-    'store_id' => $request->header('store_id'),
-    'token'    => $request->bearerToken(),
-]);
-
+  
     $validator = Validator::make($request->all(), [
         'store_id' => 'required|exists:stores,id',
         'sort_by'  => 'nullable|in:latest,popular,recommended,trending',
@@ -113,11 +108,13 @@ class ProductController extends Controller
 
 public static function getLatestProducts($limit, $offset, string $branch)
 {
-    $query = Product::where('status', 1)
-        ->latest()
-        ->skip($offset ?? 0)
-        ->take($limit ?? 20)
-        ->get();
+  $query = Product::where('status', 1)
+    ->select('products.*') // 🔥 REQUIRED
+    ->latest()
+    ->skip($offset ?? 0)
+    ->take($limit ?? 20)
+    ->get();
+
 
     foreach ($query as $product) {
         $product->total_stock = self::calculateStock(

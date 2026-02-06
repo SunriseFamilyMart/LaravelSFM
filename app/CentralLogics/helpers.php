@@ -98,8 +98,13 @@ $item['stock'] = (int) \DB::table('inventory_transactions')
     ->whereRaw('TRIM(UPPER(branch)) = TRIM(UPPER(?))', [$branch])
     ->sum('remaining_qty');
 
-$item['minimum_order_quantity'] = (int) ($item['minimum_order_quantity'] ?? 1);
-$item['maximum_order_quantity'] = (int) ($item['maximum_order_quantity'] ?? 0);
+     $item['minimum_order_quantity'] = isset($item['minimum_order_quantity'])
+    ? (int) $item['minimum_order_quantity']
+    : (int) (\DB::table('products')->where('id', $item['id'])->value('minimum_order_quantity') ?? 1);
+
+$item['maximum_order_quantity'] = isset($item['maximum_order_quantity'])
+    ? (int) $item['maximum_order_quantity']
+    : (int) (\DB::table('products')->where('id', $item['id'])->value('maximum_order_quantity') ?? 0);
             // ===== CATEGORY =====
             $categories = is_array($item['category_ids'])
                 ? $item['category_ids']
