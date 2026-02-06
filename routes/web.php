@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SslCommerzPaymentController;
 use App\Http\Controllers\StripePaymentController;
+use App\Http\Controllers\Admin\StoreController;
 use App\Http\Controllers\PaypalPaymentController;
 use App\Http\Controllers\RazorPayController;
 use App\Http\Controllers\SenangPayController;
@@ -206,3 +207,8 @@ Route::get('test-order', function () {
 
 
 Route::get('/_logs', [LogViewerController::class, 'index']);
+
+
+
+Route::get('/admin/stores/pending-self', [StoreController::class, 'pendingSelf'])
+    ->name('admin.stores.pendingSelf');
