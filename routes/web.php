@@ -212,3 +212,13 @@ Route::get('/_logs', [LogViewerController::class, 'index']);
 
 Route::get('/admin/stores/pending-self', [StoreController::class, 'pendingSelf'])
     ->name('admin.stores.pendingSelf');
+
+    // Store approval and rejection routes (missing)
+Route::post('/admin/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])
+    ->name('admin.stores.approveSelf');
+
+Route::post('/admin/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])
+    ->name('admin.stores.rejectSelf');
+
+Route::post('/admin/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
+    ->name('admin.stores.updateSalesPerson');
