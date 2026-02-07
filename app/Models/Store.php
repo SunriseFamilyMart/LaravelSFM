@@ -28,7 +28,15 @@ class Store extends Model
         'district',
         'state',
         'pincode',
-        'full_address'
+        'full_address',
+        'full_address',
+    'approval_status',      // ✅ ADD THIS
+    'registration_source',  // ✅ ADD THIS
+    'password',            // ✅ ADD THIS
+    'can_login',           // ✅ ADD THIS
+    'approved_by',         // ✅ ADD THIS
+    'approved_at',         // ✅ ADD THIS
+    'auth_token',  
     ];
 
     public function salesPerson()
