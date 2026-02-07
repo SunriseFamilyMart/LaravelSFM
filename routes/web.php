@@ -204,14 +204,6 @@ Route::get('test-order', function () {
 
 });
 
-
-
 Route::get('/_logs', [LogViewerController::class, 'index']);
 
 
-Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => ['auth:admin']], function () {
-    Route::get('/stores/pending-self', [StoreController::class, 'pendingSelf'])->name('stores.pendingSelf');
-    Route::post('/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])->name('stores.approveSelf');
-    Route::post('/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])->name('stores.rejectSelf');
-    Route::post('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])->name('stores.updateSalesPerson');
-});
