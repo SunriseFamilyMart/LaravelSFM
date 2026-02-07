@@ -74,16 +74,13 @@ Route::get('credit-note/{id}/pdf', [CreditNoteController::class, 'pdf'])
             Route::get('/create', [DeliveryTripController::class, 'create'])->name('delivery_trips.create');
             Route::post('/store', [DeliveryTripController::class, 'store'])->name('delivery_trips.store');
         });
-
+        Route::get('stores/pending-self', [StoreController::class, 'pendingSelf'])->name('stores.pendingSelf');
+        Route::post('stores/{store}/approve-self', [StoreController::class, 'approveSelf'])->name('stores.approveSelf');
+        Route::post('stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])->name('stores.rejectSelf');
         Route::resource('stores', StoreController::class);
-Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
+        Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
     ->name('stores.updateSalesPerson');
-// ADD THESE THREE LINES:
-Route::get('stores/pending-self', [StoreController::class, 'pendingSelf'])->name('stores.pendingSelf');
-Route::post('stores/{store}/approve-self', [StoreController::class, 'approveSelf'])->name('stores.approveSelf');
-Route::post('stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])->name('stores.rejectSelf');
-
-Route::resource('roles-access', RolesAccessController::class);
+        Route::resource('roles-access', RolesAccessController::class);
 
         Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('dashboard');     //test route
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
