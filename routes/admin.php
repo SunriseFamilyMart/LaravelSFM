@@ -79,11 +79,11 @@ Route::get('credit-note/{id}/pdf', [CreditNoteController::class, 'pdf'])
         Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
             ->name('stores.updateSalesPerson');
         Route::get('/stores/pending-self', [StoreController::class, 'pendingSelf'])
-    ->name('stores.pendingSelf');
-Route::post('/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])
-    ->name('stores.approveSelf');
-Route::post('/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])
-    ->name('stores.rejectSelf');
+            ->name('stores.pendingSelf');
+        Route::post('/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])
+            ->name('stores.approveSelf');
+        Route::post('/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])
+            ->name('stores.rejectSelf');
         Route::resource('roles-access', RolesAccessController::class);
 
 
