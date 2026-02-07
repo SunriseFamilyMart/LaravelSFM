@@ -209,16 +209,9 @@ Route::get('test-order', function () {
 Route::get('/_logs', [LogViewerController::class, 'index']);
 
 
-
-Route::get('/admin/stores/pending-self', [StoreController::class, 'pendingSelf'])
-    ->name('admin.stores.pendingSelf');
-
-    // Store approval and rejection routes (missing)
-Route::post('/admin/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])
-    ->name('admin.stores.approveSelf');
-
-Route::post('/admin/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])
-    ->name('admin.stores.rejectSelf');
-
-Route::post('/admin/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
-    ->name('admin.stores.updateSalesPerson');
+Route::group(['prefix' => 'admin', 'as' => 'admin.', 'middleware' => ['auth:admin']], function () {
+    Route::get('/stores/pending-self', [StoreController::class, 'pendingSelf'])->name('stores.pendingSelf');
+    Route::post('/stores/{store}/approve-self', [StoreController::class, 'approveSelf'])->name('stores.approveSelf');
+    Route::post('/stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])->name('stores.rejectSelf');
+    Route::post('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])->name('stores.updateSalesPerson');
+});
