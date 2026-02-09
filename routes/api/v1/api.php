@@ -143,6 +143,7 @@ Route::group(['namespace' => 'Api\V1', 'middleware' => 'localization'], function
             Route::put('cancel', [OrderController::class, 'cancelOrder'])->withoutMiddleware(['auth:api', 'customer_is_block']);
             Route::post('track', [OrderController::class, 'trackOrder'])->withoutMiddleware(['auth:api', 'customer_is_block']);
             Route::put('payment-method', [OrderController::class, 'updatePaymentMethod'])->withoutMiddleware(['auth:api', 'customer_is_block']);
+            Route::get('{id}/picking-status', [OrderController::class, 'pickingStatus'])->withoutMiddleware(['auth:api', 'customer_is_block']);
         });
         Route::group(['prefix' => 'message'], function () {
             //customer-admin

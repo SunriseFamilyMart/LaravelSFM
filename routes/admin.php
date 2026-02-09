@@ -45,6 +45,7 @@ use App\Http\Controllers\Admin\StoreController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\DeliveryTripController;
 use App\Http\Controllers\Admin\RolesAccessController;
+use App\Http\Controllers\Admin\PickingController;
 
 
 
@@ -262,6 +263,14 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
         ->name('product.price');
     Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])
         ->name('supplier.products');
+        });
+
+        Route::group(['prefix' => 'picking', 'as' => 'picking.'], function () {
+            Route::get('/', [PickingController::class, 'index'])->name('index');
+            Route::get('/{order_id}', [PickingController::class, 'show'])->name('show');
+            Route::post('/pick-item', [PickingController::class, 'pickItem'])->name('pick-item');
+            Route::post('/{order_id}/complete', [PickingController::class, 'completePicking'])->name('complete');
+            Route::post('/bulk-assign', [PickingController::class, 'bulkAssignDeliveryMan'])->name('bulk-assign');
         });
 
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {

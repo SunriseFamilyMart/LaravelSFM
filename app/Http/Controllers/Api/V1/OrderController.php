@@ -507,4 +507,35 @@ class OrderController extends Controller
             ],
         ], 401);
     }
+
+    /**
+     * Get picking status for an order
+     *
+     * @param $id
+     * @return JsonResponse
+     */
+    public function pickingStatus($id): JsonResponse
+    {
+        $order = $this->order->with(['pickingItems.product:id,name,image'])
+            ->findOrFail($id);
+
+        $items = $order->pickingItems->map(function ($item) {
+            return [
+                'product_id' => $item->product_id,
+                'product_name' => $item->product->name ?? 'N/A',
+                'product_image' => $item->product->image ?? '',
+                'ordered_qty' => $item->ordered_qty,
+                'picked_qty' => $item->picked_qty,
+                'missing_qty' => $item->missing_qty,
+                'missing_reason' => $item->missing_reason,
+                'status' => $item->status,
+            ];
+        });
+
+        return response()->json([
+            'order_id' => $order->id,
+            'order_status' => $order->order_status,
+            'items' => $items,
+        ]);
+    }
 }

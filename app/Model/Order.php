@@ -172,6 +172,9 @@ public function creditNotes()
     return $this->hasMany(CreditNote::class, 'order_id');
 }
 
-
+    public function pickingItems()
+    {
+        return $this->hasMany(\App\Models\OrderPickingItem::class);
+    }
 
 }
