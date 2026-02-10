@@ -21,7 +21,7 @@
             vertical-align: middle;
         }
 
-        .missing-reason-dropdown {
+        .missing-fields {
             display: none;
         }
     </style>
@@ -70,233 +70,211 @@
             </div>
         </div>
 
+        @php
+            $allPicked = $order->pickingItems->isNotEmpty() && 
+                         $order->pickingItems->where('status', 'pending')->count() == 0;
+        @endphp
+
         <!-- Picking Items Card -->
-        <div class="card">
+        <div class="card mb-3">
             <div class="card-header">
                 <h5>{{ translate('Items to Pick') }}</h5>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover table-borderless picking-table">
-                        <thead class="thead-light">
-                            <tr>
-                                <th>{{ translate('Image') }}</th>
-                                <th>{{ translate('Product Name') }}</th>
-                                <th>{{ translate('Ordered Qty') }}</th>
-                                <th>{{ translate('Pick Qty') }}</th>
-                                <th>{{ translate('Missing Qty') }}</th>
-                                <th>{{ translate('Missing Reason') }}</th>
-                                <th>{{ translate('Status') }}</th>
-                                <th class="text-center">{{ translate('Action') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($order->pickingItems as $item)
-                                <tr data-picking-item-id="{{ $item->id }}">
-                                    <td>
-                                        @if ($item->product && $item->product->image)
-                                            <img src="{{ asset('storage/app/public/product/' . json_decode($item->product->image)[0]) }}" 
-                                                 alt="{{ $item->product->name }}" 
-                                                 class="product-image"
-                                                 onerror="this.src='{{ asset('public/assets/admin/img/160x160/img2.jpg') }}'">
-                                        @else
-                                            <img src="{{ asset('public/assets/admin/img/160x160/img2.jpg') }}" 
-                                                 alt="Product" 
-                                                 class="product-image">
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @if ($item->product)
-                                            {{ $item->product->name }}
-                                        @else
-                                            {{ translate('Product not found') }}
-                                        @endif
-                                    </td>
-                                    <td class="ordered-qty">{{ $item->ordered_qty }}</td>
-                                    <td>
-                                        <input type="number" 
-                                               class="form-control pick-qty-input" 
-                                               min="0" 
-                                               max="{{ $item->ordered_qty }}" 
-                                               value="{{ $item->picked_qty }}" 
-                                               {{ $item->status != 'pending' ? 'disabled' : '' }}
-                                               style="width: 100px;">
-                                    </td>
-                                    <td class="missing-qty">{{ $item->missing_qty }}</td>
-                                    <td>
-                                        <select class="form-control missing-reason-dropdown" style="width: 150px;">
-                                            <option value="">{{ translate('Select Reason') }}</option>
-                                            <option value="out_of_stock" {{ $item->missing_reason == 'out_of_stock' ? 'selected' : '' }}>
-                                                {{ translate('Out of Stock') }}
-                                            </option>
-                                            <option value="damaged" {{ $item->missing_reason == 'damaged' ? 'selected' : '' }}>
-                                                {{ translate('Damaged') }}
-                                            </option>
-                                            <option value="expired" {{ $item->missing_reason == 'expired' ? 'selected' : '' }}>
-                                                {{ translate('Expired') }}
-                                            </option>
-                                            <option value="not_found" {{ $item->missing_reason == 'not_found' ? 'selected' : '' }}>
-                                                {{ translate('Not Found') }}
-                                            </option>
-                                        </select>
-                                    </td>
-                                    <td class="status-cell">
-                                        @if ($item->status == 'pending')
-                                            <span class="badge badge-warning status-badge">{{ translate('Pending') }}</span>
-                                        @elseif ($item->status == 'picked')
-                                            <span class="badge badge-success status-badge">{{ translate('Picked') }}</span>
-                                        @elseif ($item->status == 'partial')
-                                            <span class="badge badge-info status-badge">{{ translate('Partial') }}</span>
-                                        @elseif ($item->status == 'missing')
-                                            <span class="badge badge-danger status-badge">{{ translate('Missing') }}</span>
-                                        @endif
-                                    </td>
-                                    <td class="text-center">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-primary confirm-pick-btn"
-                                                {{ $item->status != 'pending' ? 'disabled' : '' }}>
-                                            {{ translate('Confirm Pick') }}
-                                        </button>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                @if ($allPicked)
+                    <div class="alert alert-success">
+                        {{ translate('Picking completed for this order!') }}
+                    </div>
+                @endif
 
-                <div class="mt-4 text-right">
-                    <form method="POST" action="{{ route('admin.picking.complete', ['order_id' => $order->id]) }}" id="completePickingForm">
+                <form method="POST" action="{{ route('admin.picking.complete', ['order_id' => $order->id]) }}" id="completePickingForm">
+                    @csrf
+                    <div class="table-responsive">
+                        <table class="table table-hover table-borderless picking-table">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>{{ translate('Image') }}</th>
+                                    <th>{{ translate('Product Name') }}</th>
+                                    <th>{{ translate('Ordered Qty') }}</th>
+                                    <th>{{ translate('Mark as Missing') }}</th>
+                                    @if ($allPicked)
+                                        <th>{{ translate('Status') }}</th>
+                                    @endif
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($order->pickingItems as $item)
+                                    <tr data-picking-item-id="{{ $item->id }}">
+                                        <td>
+                                            @if ($item->product && $item->product->image)
+                                                <img src="{{ asset('storage/app/public/product/' . json_decode($item->product->image)[0]) }}" 
+                                                     alt="{{ $item->product->name }}" 
+                                                     class="product-image"
+                                                     onerror="this.src='{{ asset('public/assets/admin/img/160x160/img2.jpg') }}'">
+                                            @else
+                                                <img src="{{ asset('public/assets/admin/img/160x160/img2.jpg') }}" 
+                                                     alt="Product" 
+                                                     class="product-image">
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($item->product)
+                                                {{ $item->product->name }}
+                                            @else
+                                                {{ translate('Product not found') }}
+                                            @endif
+                                        </td>
+                                        <td class="ordered-qty">{{ $item->ordered_qty }}</td>
+                                        <td>
+                                            @if ($allPicked)
+                                                @if ($item->missing_qty > 0)
+                                                    <span class="badge badge-warning">{{ translate('Missing') }}: {{ $item->missing_qty }}</span>
+                                                    @if ($item->missing_reason)
+                                                        <br><small class="text-muted">{{ translate(ucfirst(str_replace('_', ' ', $item->missing_reason))) }}</small>
+                                                    @endif
+                                                @else
+                                                    <span class="text-success">{{ translate('Fully Picked') }}</span>
+                                                @endif
+                                            @else
+                                                <div>
+                                                    <input type="checkbox" 
+                                                           class="mark-missing-checkbox" 
+                                                           name="missing_items[]" 
+                                                           value="{{ $item->id }}"
+                                                           id="missing_{{ $item->id }}">
+                                                    <label for="missing_{{ $item->id }}">{{ translate('Missing') }}</label>
+                                                    
+                                                    <div class="missing-fields mt-2" id="missing_fields_{{ $item->id }}">
+                                                        <div class="form-group">
+                                                            <label>{{ translate('Missing Qty') }}</label>
+                                                            <input type="number" 
+                                                                   class="form-control missing-qty-input" 
+                                                                   name="missing_qty[{{ $item->id }}]"
+                                                                   min="1" 
+                                                                   max="{{ $item->ordered_qty }}" 
+                                                                   value="1"
+                                                                   required
+                                                                   style="width: 120px;">
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label>{{ translate('Missing Reason') }}</label>
+                                                            <select class="form-control missing-reason-select" 
+                                                                    name="missing_reason[{{ $item->id }}]"
+                                                                    style="width: 200px;"
+                                                                    required>
+                                                                <option value="">{{ translate('Select Reason') }}</option>
+                                                                <option value="out_of_stock">{{ translate('Out of Stock') }}</option>
+                                                                <option value="damaged">{{ translate('Damaged') }}</option>
+                                                                <option value="expired">{{ translate('Expired') }}</option>
+                                                                <option value="not_found">{{ translate('Not Found') }}</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </td>
+                                        @if ($allPicked)
+                                            <td>
+                                                @if ($item->status == 'pending')
+                                                    <span class="badge badge-warning status-badge">{{ translate('Pending') }}</span>
+                                                @elseif ($item->status == 'picked')
+                                                    <span class="badge badge-success status-badge">{{ translate('Picked') }}</span>
+                                                @elseif ($item->status == 'partial')
+                                                    <span class="badge badge-info status-badge">{{ translate('Partial') }}</span>
+                                                @elseif ($item->status == 'missing')
+                                                    <span class="badge badge-danger status-badge">{{ translate('Missing') }}</span>
+                                                @endif
+                                            </td>
+                                        @endif
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (!$allPicked)
+                        <div class="mt-4 text-right">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                {{ translate('Complete Picking') }}
+                            </button>
+                        </div>
+                    @endif
+                </form>
+            </div>
+        </div>
+
+        <!-- Delivery Man Assignment Card -->
+        @if ($order->order_status == 'processing' || $allPicked)
+            <div class="card">
+                <div class="card-header">
+                    <h5>{{ translate('Assign Delivery Man') }}</h5>
+                </div>
+                <div class="card-body">
+                    @if ($order->delivery_man_id)
+                        <div class="alert alert-info">
+                            {{ translate('Delivery man already assigned') }}: 
+                            @php
+                                $assignedDM = $deliveryMen->firstWhere('id', $order->delivery_man_id);
+                            @endphp
+                            @if ($assignedDM)
+                                {{ $assignedDM->f_name }} {{ $assignedDM->l_name }}
+                            @endif
+                        </div>
+                    @endif
+                    
+                    <form method="POST" action="{{ route('admin.picking.bulk-assign') }}">
                         @csrf
-                        <button type="submit" class="btn btn-success btn-lg" id="completePickingBtn" disabled>
-                            {{ translate('Complete Picking') }}
-                        </button>
+                        <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ translate('Select Delivery Man') }}</label>
+                                    <select class="custom-select" name="delivery_man_id" required>
+                                        <option value="">{{ translate('Select Delivery Man') }}</option>
+                                        @foreach ($deliveryMen as $dm)
+                                            <option value="{{ $dm->id }}" {{ $order->delivery_man_id == $dm->id ? 'selected' : '' }}>
+                                                {{ $dm->f_name }} {{ $dm->l_name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="d-block">&nbsp;</label>
+                                <button type="submit" class="btn btn-primary">
+                                    {{ translate('Assign Delivery Man') }}
+                                </button>
+                            </div>
+                        </div>
                     </form>
                 </div>
             </div>
-        </div>
+        @endif
     </div>
 @endsection
 
 @push('script_2')
     <script>
         $(document).ready(function() {
-            // Update missing qty when pick qty changes
-            $('.pick-qty-input').on('input', function() {
-                const row = $(this).closest('tr');
-                const orderedQty = parseInt(row.find('.ordered-qty').text());
-                const pickQty = parseInt($(this).val()) || 0;
-                const missingQty = orderedQty - pickQty;
+            // Show/hide missing fields when checkbox is toggled
+            $('.mark-missing-checkbox').on('change', function() {
+                const itemId = $(this).val();
+                const fieldsDiv = $('#missing_fields_' + itemId);
+                const missingQtyInput = fieldsDiv.find('.missing-qty-input');
+                const missingReasonSelect = fieldsDiv.find('.missing-reason-select');
                 
-                row.find('.missing-qty').text(missingQty);
-                
-                // Show/hide missing reason dropdown
-                const dropdown = row.find('.missing-reason-dropdown');
-                if (missingQty > 0) {
-                    dropdown.show();
-                    dropdown.prop('required', true);
+                if ($(this).is(':checked')) {
+                    fieldsDiv.show();
+                    missingQtyInput.prop('required', true);
+                    missingReasonSelect.prop('required', true);
                 } else {
-                    dropdown.hide();
-                    dropdown.prop('required', false);
-                    dropdown.val('');
+                    fieldsDiv.hide();
+                    missingQtyInput.prop('required', false);
+                    missingReasonSelect.prop('required', false);
                 }
             });
 
-            // Initialize missing reason dropdowns based on current missing qty
-            $('.pick-qty-input').each(function() {
-                const row = $(this).closest('tr');
-                const missingQty = parseInt(row.find('.missing-qty').text());
-                const dropdown = row.find('.missing-reason-dropdown');
-                
-                if (missingQty > 0) {
-                    dropdown.show();
-                }
-            });
-
-            // Confirm pick button click
-            $('.confirm-pick-btn').on('click', function() {
-                const btn = $(this);
-                const row = btn.closest('tr');
-                const pickingItemId = row.data('picking-item-id');
-                const pickedQty = parseInt(row.find('.pick-qty-input').val()) || 0;
-                const missingQty = parseInt(row.find('.missing-qty').text());
-                const missingReason = row.find('.missing-reason-dropdown').val();
-
-                // Validate
-                if (missingQty > 0 && !missingReason) {
-                    toastr.error('{{ translate("Please select a missing reason") }}');
-                    return;
-                }
-
-                // Disable button and show loading
-                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
-
-                // AJAX call
-                $.ajax({
-                    url: '{{ route("admin.picking.pick-item") }}',
-                    type: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        picking_item_id: pickingItemId,
-                        picked_qty: pickedQty,
-                        missing_reason: missingReason
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            toastr.success(response.message || '{{ translate("Item picked successfully") }}');
-                            
-                            // Update status badge
-                            const statusCell = row.find('.status-cell');
-                            let badgeClass = '';
-                            let statusText = '';
-                            
-                            if (response.data.status === 'picked') {
-                                badgeClass = 'badge-success';
-                                statusText = '{{ translate("Picked") }}';
-                            } else if (response.data.status === 'partial') {
-                                badgeClass = 'badge-info';
-                                statusText = '{{ translate("Partial") }}';
-                            } else if (response.data.status === 'missing') {
-                                badgeClass = 'badge-danger';
-                                statusText = '{{ translate("Missing") }}';
-                            }
-                            
-                            statusCell.html('<span class="badge ' + badgeClass + ' status-badge">' + statusText + '</span>');
-                            
-                            // Disable inputs
-                            row.find('.pick-qty-input').prop('disabled', true);
-                            row.find('.missing-reason-dropdown').prop('disabled', true);
-                            
-                            // Check if all items are picked
-                            checkAllItemsPicked();
-                        } else {
-                            toastr.error(response.message || '{{ translate("Failed to pick item") }}');
-                            btn.prop('disabled', false).html('{{ translate("Confirm Pick") }}');
-                        }
-                    },
-                    error: function(xhr) {
-                        const message = xhr.responseJSON?.message || '{{ translate("An error occurred") }}';
-                        toastr.error(message);
-                        btn.prop('disabled', false).html('{{ translate("Confirm Pick") }}');
-                    }
-                });
-            });
-
-            // Check if all items are picked
-            function checkAllItemsPicked() {
-                const pendingCount = $('.status-cell .badge-warning').length;
-                const completeBtn = $('#completePickingBtn');
-                
-                if (pendingCount === 0) {
-                    completeBtn.prop('disabled', false);
-                } else {
-                    completeBtn.prop('disabled', true);
-                }
-            }
-
-            // Initial check
-            checkAllItemsPicked();
-
-            // Complete picking form submit
+            // Complete picking form submit confirmation
             $('#completePickingForm').on('submit', function(e) {
                 if (!confirm('{{ translate("Are you sure you want to complete picking? This will update the order amount based on picked quantities.") }}')) {
                     e.preventDefault();

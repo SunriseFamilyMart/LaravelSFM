@@ -30,8 +30,21 @@
                 <form class="w-100" method="GET" action="{{ route('admin.picking.index') }}">
                     <div class="row g-3 g-sm-4 g-md-3 g-lg-4">
 
+                        <!-- From Date Filter -->
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="input-label">{{ translate('From Date') }}</label>
+                            <input type="date" class="form-control" name="from" value="{{ $from ?? '' }}">
+                        </div>
+
+                        <!-- To Date Filter -->
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="input-label">{{ translate('To Date') }}</label>
+                            <input type="date" class="form-control" name="to" value="{{ $to ?? '' }}">
+                        </div>
+
                         <!-- Branch Filter -->
                         <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="input-label">{{ translate('Branch') }}</label>
                             <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="branch_id">
                                 <option disabled>--- {{ translate('select') }} {{ translate('branch') }} ---</option>
                                 <option value="all" {{ ($branchId ?? '') == 'all' ? 'selected' : '' }}>{{ translate('all') }} {{ translate('branch') }}</option>
@@ -44,7 +57,7 @@
                         </div>
 
                         <!-- Buttons -->
-                        <div class="col-sm-6 col-md-12 col-lg-4 __btn-row">
+                        <div class="col-sm-6 col-md-12 col-lg-3 __btn-row align-self-end">
                             <a href="{{ route('admin.picking.index') }}" class="btn w-100 btn--reset min-h-45px">{{ translate('clear') }}</a>
                             <button type="submit" class="btn w-100 btn--primary min-h-45px">{{ translate('show data') }}</button>
                         </div>
@@ -147,6 +160,10 @@
                                                 <span class="badge badge-soft-primary">{{ translate('processing') }}</span>
                                             @elseif($order->order_status == 'packaging')
                                                 <span class="badge badge-soft-dark">{{ translate('packaging') }}</span>
+                                            @endif
+                                            
+                                            @if ($order->all_picked ?? false)
+                                                <br><span class="badge badge-success mt-1">{{ translate('Picked') }} ✓</span>
                                             @endif
                                         </td>
                                         <td>
