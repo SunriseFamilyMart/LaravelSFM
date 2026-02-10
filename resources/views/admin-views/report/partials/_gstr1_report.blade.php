@@ -63,7 +63,7 @@
                 </thead>
                 <tbody>
                     @if(count($gstrData) > 0)
-                        @foreach ($gstrData as $index => $data)
+                        @foreach ($gstrData as $data)
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
                                 <td>{{ $data['hsn_code'] }}</td>

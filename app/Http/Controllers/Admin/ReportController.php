@@ -788,8 +788,10 @@ class ReportController extends Controller
             
             $purchasesByProduct[$productId]['quantity'] += $purchase->quantity;
             $purchasesByProduct[$productId]['total_amount'] += $purchase->total_amount;
-            // Calculate tax based on product tax percentage
-            $taxAmount = ($purchase->total_amount * ($purchase->tax ?? 0)) / 100;
+            // Calculate tax - assuming total_amount is tax-inclusive
+            $taxRate = ($purchase->tax ?? 0) / 100;
+            $taxableAmount = $purchase->total_amount / (1 + $taxRate);
+            $taxAmount = $purchase->total_amount - $taxableAmount;
             $purchasesByProduct[$productId]['tax_amount'] += $taxAmount;
         }
 
@@ -1029,7 +1031,6 @@ class ReportController extends Controller
      */
     public function exportPurchaseReportPdf(Request $request)
     {
-        $branchId = $request['branch_id'];
         $startDate = $request['start_date'];
         $endDate = $request['end_date'];
 
