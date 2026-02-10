@@ -536,12 +536,12 @@ class DashboardController extends Controller
         $profitData = $this->calculateProfitAndMargin($orderQuery, $purchaseQuery);
 
         return [
-            'total_sales' => $totalSales,
-            'total_purchases' => $totalPurchases,
-            'total_orders' => $totalOrders,
-            'delivered_orders' => $deliveredOrders,
-            'profit' => $profitData['profit'],
-            'margin' => $profitData['margin'],
+            'total_sales' => round($totalSales ?? 0, 2),
+            'total_purchases' => round($totalPurchases ?? 0, 2),
+            'total_orders' => $totalOrders ?? 0,
+            'delivered_orders' => $deliveredOrders ?? 0,
+            'profit' => $profitData['profit'] ?? 0,
+            'margin' => $profitData['margin'] ?? 0,
         ];
     }
 
@@ -561,21 +561,21 @@ class DashboardController extends Controller
 
         foreach ($deliveredOrders as $order) {
             foreach ($order->details as $detail) {
-                $quantity = $detail->quantity;
-                $sellingPrice = $detail->price;
+                $quantity = $detail->quantity ?? 0;
+                $sellingPrice = $detail->price ?? 0;
                 
                 // Revenue from this order detail
                 $totalRevenue += $sellingPrice * $quantity;
 
                 // Try to get purchase price from AdminPurchase
                 $purchasePrice = 0;
-                if ($detail->product) {
+                if ($detail->product_id) {
                     $latestPurchase = $this->adminPurchase
                         ->where('product_id', $detail->product_id)
                         ->latest()
                         ->first();
                     
-                    if ($latestPurchase) {
+                    if ($latestPurchase && $latestPurchase->purchase_price) {
                         $purchasePrice = $latestPurchase->purchase_price;
                     }
                 }
@@ -589,7 +589,7 @@ class DashboardController extends Controller
         $margin = $totalRevenue > 0 ? ($profit / $totalRevenue) * 100 : 0;
 
         return [
-            'profit' => $profit,
+            'profit' => round($profit, 2),
             'margin' => round($margin, 2),
         ];
     }
