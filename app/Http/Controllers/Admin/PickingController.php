@@ -78,6 +78,17 @@ class PickingController extends Controller
 
         $orders = $query->latest()->paginate(15);
 
+        // Calculate total weight for each order
+        foreach ($orders as $order) {
+            $totalWeight = 0;
+            foreach ($order->details as $detail) {
+                if ($detail->product && isset($detail->product->weight)) {
+                    $totalWeight += $detail->product->weight * $detail->quantity;
+                }
+            }
+            $order->total_weight = $totalWeight;
+        }
+
         return view('admin-views.picking.index', compact(
             'orders',
             'branches',

@@ -150,15 +150,7 @@
                                         {{ $order->details->count() }}
                                     </td>
                                     <td>
-                                        @php
-                                            $totalWeight = 0;
-                                            foreach ($order->details as $detail) {
-                                                if ($detail->product && isset($detail->product->weight)) {
-                                                    $totalWeight += $detail->product->weight * $detail->quantity;
-                                                }
-                                            }
-                                        @endphp
-                                        {{ number_format($totalWeight, 2) }} kg
+                                        {{ number_format($order->total_weight ?? 0, 2) }} kg
                                     </td>
                                     <td>
                                         <span class="badge badge-soft-{{ $order['order_status'] == 'pending' ? 'warning' : 'info' }}">

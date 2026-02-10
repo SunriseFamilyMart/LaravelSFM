@@ -69,10 +69,15 @@
                                             <td>
                                                 <div class="media">
                                                     @if ($product && $product->image)
-                                                        <img class="avatar avatar-sm mr-3"
-                                                            src="{{ asset('storage/app/public/product/' . json_decode($product->image)[0]) }}"
-                                                            onerror="this.src='{{ asset('public/assets/admin/img/160x160/2.png') }}'"
-                                                            alt="{{ $productName }}">
+                                                        @php
+                                                            $images = json_decode($product->image, true);
+                                                        @endphp
+                                                        @if ($images && is_array($images) && count($images) > 0)
+                                                            <img class="avatar avatar-sm mr-3"
+                                                                src="{{ asset('storage/app/public/product/' . $images[0]) }}"
+                                                                onerror="this.src='{{ asset('public/assets/admin/img/160x160/2.png') }}'"
+                                                                alt="{{ $productName }}">
+                                                        @endif
                                                     @endif
                                                     <div class="media-body">
                                                         <h5 class="text-hover-primary mb-0">{{ $productName }}</h5>
