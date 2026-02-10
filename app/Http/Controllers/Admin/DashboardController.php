@@ -109,9 +109,11 @@ class DashboardController extends Controller
 
         $data['recent_orders'] = $this->order->notPos()->latest()->take(5)->get(['id', 'created_at', 'order_status']);
 
-        // Business metrics
-        $businessMetrics = self::fetchBusinessMetrics();
-        $data = array_merge($data, $businessMetrics);
+        // Business metrics - keep as separate array for clarity
+        $data['business_metrics'] = self::fetchBusinessMetrics();
+        
+        // Also merge individual metrics for backward compatibility
+        $data = array_merge($data, $data['business_metrics']);
 
         $data['top_sell'] = $topSell;
         $data['most_rated_products'] = $mostRatedProducts;
@@ -520,8 +522,15 @@ class DashboardController extends Controller
         $purchaseQuery = $this->adminPurchase->query();
 
         if ($dateFrom && $dateTo) {
-            $orderQuery->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
-            $purchaseQuery->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+            // Use Carbon for safer date handling
+            try {
+                $dateFromCarbon = Carbon::parse($dateFrom)->startOfDay();
+                $dateToCarbon = Carbon::parse($dateTo)->endOfDay();
+                $orderQuery->whereBetween('created_at', [$dateFromCarbon, $dateToCarbon]);
+                $purchaseQuery->whereBetween('created_at', [$dateFromCarbon, $dateToCarbon]);
+            } catch (\Exception $e) {
+                // Invalid date format, skip date filtering
+            }
         }
 
         if ($branchId) {

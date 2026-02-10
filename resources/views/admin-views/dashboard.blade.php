@@ -63,17 +63,7 @@
                         </div>
                     </div>
                     <div class="row g-2" id="business_metrics">
-                        @php
-                            $metrics = [
-                                'total_sales' => $data['total_sales'] ?? 0,
-                                'total_purchases' => $data['total_purchases'] ?? 0,
-                                'total_orders' => $data['total_orders'] ?? 0,
-                                'delivered_orders' => $data['delivered_orders'] ?? 0,
-                                'profit' => $data['profit'] ?? 0,
-                                'margin' => $data['margin'] ?? 0,
-                            ];
-                        @endphp
-                        @include('admin-views.partials._dashboard-business-metrics', ['metrics' => $metrics])
+                        @include('admin-views.partials._dashboard-business-metrics', ['metrics' => $data['business_metrics']])
                     </div>
                 </div>
             </div>
@@ -497,6 +487,7 @@
                 },
                 error: function(jqXHR, textStatus, errorThrown) {
                     console.error('Error updating business metrics:', errorThrown);
+                    toastr.error('{{ translate("Failed to update business metrics. Please try again.") }}');
                 },
                 complete: function() {
                     $('#loading').hide()
