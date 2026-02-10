@@ -524,21 +524,21 @@ public function storeOrder(Request $request)
         //refund amount to wallet
         if (in_array($request['order_status'], ['returned', 'failed', 'canceled']) && $order['is_guest'] == 0 && isset($order->customer) && Helpers::get_business_settings('wallet_status') == 1) {
 
-            if ($order['payment_method'] == 'wallet_payment' && $order->partial_payment->isEmpty()) {
-                $this->calculateRefundAmount(order: $order, amount: $order->order_amount);
-            }
+            if ($order->payments && $order->payments->where('payment_status', 'complete')->isNotEmpty()) {
+                $payments_total = $order->payments->where('payment_status', 'complete')->sum('amount');
+                $this->calculateRefundAmount(order: $order, amount: $payments_total);
+            } else {
+                if ($order['payment_method'] == 'wallet_payment') {
+                    $this->calculateRefundAmount(order: $order, amount: $order->order_amount);
+                }
 
-            if ($order['payment_method'] != 'cash_on_delivery' && $order['payment_method'] != 'wallet_payment' && $order['payment_method'] != 'offline_payment' && $order->partial_payment->isEmpty()) {
-                $this->calculateRefundAmount(order: $order, amount: $order->order_amount);
-            }
+                if ($order['payment_method'] != 'cash_on_delivery' && $order['payment_method'] != 'wallet_payment' && $order['payment_method'] != 'offline_payment') {
+                    $this->calculateRefundAmount(order: $order, amount: $order->order_amount);
+                }
 
-            if ($order['payment_method'] == 'offline_payment' && $order['payment_status'] == 'paid' && $order->partial_payment->isEmpty()) {
-                $this->calculateRefundAmount(order: $order, amount: $order['order_amount']);
-            }
-
-            if ($order->partial_payment->isNotEmpty()) {
-                $partial_payment_total = $order->partial_payment->sum('paid_amount');
-                $this->calculateRefundAmount(order: $order, amount: $partial_payment_total);
+                if ($order['payment_method'] == 'offline_payment' && $order['payment_status'] == 'paid') {
+                    $this->calculateRefundAmount(order: $order, amount: $order['order_amount']);
+                }
             }
         }
 

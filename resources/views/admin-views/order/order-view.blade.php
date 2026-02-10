@@ -448,23 +448,24 @@
                                         {{ Helpers::set_symbol($total + $del_c + $updatedTotalTax - $order['coupon_discount_amount'] - $order['extra_discount'] + $order['weight_charge_amount']) }}
                                         <hr>
                                     </dd>
-                                    @if ($order->partial_payment->isNotEmpty())
-                                        @foreach ($order->partial_payment as $partial)
+                                    @if ($order->payments && $order->payments->where('payment_status', 'complete')->isNotEmpty())
+                                        @foreach ($order->payments->where('payment_status', 'complete') as $payment)
                                             <dt class="col-6 text-left">
                                                 <div class="ml-auto max-w-150px">
                                                     <span>{{ translate('Paid By') }}
-                                                        ({{ str_replace('_', ' ', $partial->paid_with) }})
+                                                        ({{ str_replace('_', ' ', $payment->payment_method) }})
                                                     </span>
                                                     <span>:</span>
                                                 </div>
                                             </dt>
                                             <dd class="col-6 col-xl-5 pr-5">
-                                                {{ \App\CentralLogics\Helpers::set_symbol($partial->paid_amount) }}
+                                                {{ \App\CentralLogics\Helpers::set_symbol($payment->amount) }}
                                             </dd>
                                         @endforeach
                                         <?php
-                                        $due_amount = 0;
-                                        $due_amount = $order->partial_payment->first()?->due_amount;
+                                        $total_paid = $order->payments->where('payment_status', 'complete')->sum('amount');
+                                        $total_order = $total + $del_c + $updatedTotalTax - $order['coupon_discount_amount'] - $order['extra_discount'] + $order['weight_charge_amount'];
+                                        $due_amount = $total_order - $total_paid;
                                         ?>
                                         <dt class="col-6 text-left">
                                             <div class="ml-auto max-w-150px">

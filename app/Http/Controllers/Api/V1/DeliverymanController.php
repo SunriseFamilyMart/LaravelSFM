@@ -360,7 +360,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ->with([
             'delivery_address',
             'customer',
-            'partial_payment',
+            'payments',
             'order_image',
             'store'
         ])
@@ -827,7 +827,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         }
 
         $order = $this->order
-            ->with(['customer', 'partial_payment', 'order_image'])
+            ->with(['customer', 'payments', 'order_image'])
             ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'out_for_delivery'])
             ->where(['delivery_man_id' => $deliveryman['id'], 'id' => $request->id])
             ->first();
