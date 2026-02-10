@@ -43,6 +43,7 @@ use App\Http\Controllers\Admin\StoreController;
 use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\DeliveryTripController;
 use App\Http\Controllers\Admin\RolesAccessController;
+use App\Http\Controllers\Admin\PickingController;
 
 
 
@@ -269,6 +270,12 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::post('update-shipping/{id}', [OrderController::class, 'updateShipping'])->name('update-shipping');
             Route::post('update-timeSlot', [OrderController::class, 'updateTimeSlot'])->name('update-timeSlot');
             Route::post('update-deliveryDate', [OrderController::class, 'updateDeliveryDate'])->name('update-deliveryDate');
+        });
+
+        Route::group(['prefix' => 'picking', 'as' => 'picking.', 'middleware' => ['module:order_management']], function () {
+            Route::get('/', [PickingController::class, 'index'])->name('index');
+            Route::get('/export-pdf', [PickingController::class, 'exportPdf'])->name('export-pdf');
+            Route::get('/show/{id}', [PickingController::class, 'show'])->name('show');
         });
 
         Route::group(['prefix' => 'category', 'as' => 'category.', 'middleware' => ['module:product_management']], function () {
