@@ -152,7 +152,7 @@
                                                                    name="missing_qty[{{ $item->id }}]"
                                                                    min="1" 
                                                                    max="{{ $item->ordered_qty }}" 
-                                                                   value="{{ $item->ordered_qty }}"
+                                                                   value="1"
                                                                    style="width: 120px;">
                                                         </div>
                                                         <div class="form-group">
@@ -213,7 +213,7 @@
                         <div class="alert alert-info">
                             {{ translate('Delivery man already assigned') }}: 
                             @php
-                                $assignedDM = $deliveryMen->where('id', $order->delivery_man_id)->first();
+                                $assignedDM = $deliveryMen->firstWhere('id', $order->delivery_man_id);
                             @endphp
                             @if ($assignedDM)
                                 {{ $assignedDM->f_name }} {{ $assignedDM->l_name }}

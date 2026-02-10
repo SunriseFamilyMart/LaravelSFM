@@ -53,9 +53,19 @@ class PickingController extends Controller
             ->whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging']);
 
         // Date filter
-        if ($request->has('from') && $request->has('to')) {
-            $query->whereBetween('created_at', [$request->from . ' 00:00:00', $request->to . ' 23:59:59']);
+        if ($request->has('from') && $request->from) {
+            if ($request->has('to') && $request->to) {
+                // Both dates provided - use between
+                $query->whereBetween('created_at', [$request->from . ' 00:00:00', $request->to . ' 23:59:59']);
+                $queryParam['to'] = $to;
+            } else {
+                // Only from date - filter from this date onwards
+                $query->where('created_at', '>=', $request->from . ' 00:00:00');
+            }
             $queryParam['from'] = $from;
+        } elseif ($request->has('to') && $request->to) {
+            // Only to date - filter up to this date
+            $query->where('created_at', '<=', $request->to . ' 23:59:59');
             $queryParam['to'] = $to;
         }
 
@@ -80,6 +90,12 @@ class PickingController extends Controller
         $orders = $query->orderBy('id', 'desc')
             ->paginate(Helpers::getPagination())
             ->appends($queryParam);
+
+        // Calculate "picked" status for each order
+        foreach ($orders as $order) {
+            $order->all_picked = $order->pickingItems->isNotEmpty() && 
+                                 $order->pickingItems->where('status', 'pending')->count() == 0;
+        }
 
         return view('admin-views.picking.index', compact('orders', 'branches', 'deliveryMen', 'search', 'branchId', 'from', 'to'));
     }

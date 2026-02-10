@@ -162,13 +162,7 @@
                                                 <span class="badge badge-soft-dark">{{ translate('packaging') }}</span>
                                             @endif
                                             
-                                            @php
-                                                // Check if all picking items are completed (none are pending)
-                                                $allPicked = $order->pickingItems->isNotEmpty() && 
-                                                             $order->pickingItems->where('status', 'pending')->count() == 0;
-                                            @endphp
-                                            
-                                            @if ($allPicked)
+                                            @if ($order->all_picked ?? false)
                                                 <br><span class="badge badge-success mt-1">{{ translate('Picked') }} ✓</span>
                                             @endif
                                         </td>
