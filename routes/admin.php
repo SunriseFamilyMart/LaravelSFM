@@ -72,7 +72,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::resource('roles-access', RolesAccessController::class);
 
 
-        Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('dashboard');     //test route
+        Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('fcm-test');     //test route
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
         Route::post('order-stats', [DashboardController::class, 'orderStats'])->name('order-stats');
         Route::get('settings', [SystemController::class, 'settings'])->name('settings');
