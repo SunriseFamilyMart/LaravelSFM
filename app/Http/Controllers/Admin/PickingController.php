@@ -305,7 +305,7 @@ class PickingController extends Controller
                     $originalDiscount = $pickingItem->original_discount ?? $orderDetail->discount_on_product;
                     
                     // Save original values to picking item for audit trail (if not already saved)
-                    if (!$pickingItem->original_price) {
+                    if (is_null($pickingItem->original_price)) {
                         $pickingItem->original_price = $originalPrice;
                         $pickingItem->original_tax_amount = $originalTaxAmount;
                         $pickingItem->original_discount = $originalDiscount;
@@ -316,7 +316,8 @@ class PickingController extends Controller
                     if ($pickingItem->ordered_qty > 0) {
                         $proportion = $pickingItem->picked_qty / $pickingItem->ordered_qty;
                     } else {
-                        $proportion = 0;
+                        // Edge case: if ordered_qty is 0, use picked quantities directly without proportioning
+                        $proportion = ($pickingItem->picked_qty > 0) ? 1 : 0;
                     }
 
                     // Recalculate tax proportionally using original tax amount
