@@ -147,8 +147,12 @@
                     success: function(data) {
                         $(targetDiv).html(data);
                     },
-                    error: function() {
-                        $(targetDiv).html('<div class="alert alert-danger">{{ translate("Error loading report data") }}</div>');
+                    error: function(xhr, status, error) {
+                        var errorMsg = '<div class="alert alert-danger">' +
+                            '<h6>{{ translate("Error loading report data") }}</h6>' +
+                            '<p>{{ translate("Please check your connection and try again.") }}</p>' +
+                            '</div>';
+                        $(targetDiv).html(errorMsg);
                     }
                 });
             }

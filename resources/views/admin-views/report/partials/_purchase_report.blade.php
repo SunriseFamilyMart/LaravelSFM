@@ -106,7 +106,7 @@
                             <tr>
                                 <td>{{ $index + 1 }}</td>
                                 <td>{{ $product['product_name'] }}</td>
-                                <td>{{ $product['hsn_code'] ?: 'N/A' }}</td>
+                                <td>{{ $product['hsn_code'] ?? 'N/A' }}</td>
                                 <td>{{ $product['quantity'] }}</td>
                                 <td>{{ \App\CentralLogics\Helpers::set_symbol($product['total_amount']) }}</td>
                                 <td>{{ \App\CentralLogics\Helpers::set_symbol($product['tax_amount']) }}</td>

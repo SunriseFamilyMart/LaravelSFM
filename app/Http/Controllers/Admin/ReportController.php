@@ -628,6 +628,31 @@ class ReportController extends Controller
 //}
 
     /**
+     * Helper method to decode product details JSON
+     * @param mixed $productDetails
+     * @return array
+     */
+    private function decodeProductDetails($productDetails): array
+    {
+        return is_string($productDetails) 
+            ? json_decode($productDetails, true) 
+            : $productDetails;
+    }
+
+    /**
+     * Helper method to get company info for PDF
+     * @return array
+     */
+    private function getCompanyInfo(): array
+    {
+        $settings = $this->businessSetting->whereIn('key', ['restaurant_name', 'logo'])->get();
+        return [
+            'name' => $settings->where('key', 'restaurant_name')->first()->value ?? '',
+            'logo' => $settings->where('key', 'logo')->first()->value ?? '',
+        ];
+    }
+
+    /**
      * Advanced Reports Index - Main page with tabs
      * @param Request $request
      * @return Factory|\Illuminate\Contracts\View\View|Application
@@ -675,9 +700,7 @@ class ReportController extends Controller
         $salesByProduct = [];
         foreach ($orders as $order) {
             foreach ($order->details as $detail) {
-                $product = is_string($detail->product_details) 
-                    ? json_decode($detail->product_details, true) 
-                    : $detail->product_details;
+                $product = $this->decodeProductDetails($detail->product_details);
                 
                 $productId = $product['id'] ?? 'unknown';
                 $productName = $product['name'] ?? 'Unknown Product';
@@ -812,9 +835,7 @@ class ReportController extends Controller
         $gstrData = [];
         foreach ($orders as $order) {
             foreach ($order->details as $detail) {
-                $product = is_string($detail->product_details) 
-                    ? json_decode($detail->product_details, true) 
-                    : $detail->product_details;
+                $product = $this->decodeProductDetails($detail->product_details);
                 
                 $hsnCode = $product['hsn_code'] ?? 'N/A';
                 $taxRate = $product['tax'] ?? 0;
@@ -968,8 +989,9 @@ class ReportController extends Controller
         $startDate = $request['start_date'];
         $endDate = $request['end_date'];
 
-        $companyName = $this->businessSetting->where('key', 'restaurant_name')->first()->value ?? '';
-        $companyLogo = $this->businessSetting->where('key', 'logo')->first()->value ?? '';
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
 
         $query = $this->order->with(['details.product', 'branch'])
             ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
@@ -1011,8 +1033,9 @@ class ReportController extends Controller
         $startDate = $request['start_date'];
         $endDate = $request['end_date'];
 
-        $companyName = $this->businessSetting->where('key', 'restaurant_name')->first()->value ?? '';
-        $companyLogo = $this->businessSetting->where('key', 'logo')->first()->value ?? '';
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
 
         $purchases = \DB::table('adminpurchase')
             ->join('products', 'adminpurchase.product_id', '=', 'products.id')
@@ -1055,8 +1078,9 @@ class ReportController extends Controller
         $startDate = $request['start_date'];
         $endDate = $request['end_date'];
 
-        $companyName = $this->businessSetting->where('key', 'restaurant_name')->first()->value ?? '';
-        $companyLogo = $this->businessSetting->where('key', 'logo')->first()->value ?? '';
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
 
         $query = $this->order->with(['details.product'])
             ->where('order_status', 'delivered')
@@ -1074,9 +1098,7 @@ class ReportController extends Controller
         $gstrData = [];
         foreach ($orders as $order) {
             foreach ($order->details as $detail) {
-                $product = is_string($detail->product_details) 
-                    ? json_decode($detail->product_details, true) 
-                    : $detail->product_details;
+                $product = $this->decodeProductDetails($detail->product_details);
                 
                 $hsnCode = $product['hsn_code'] ?? 'N/A';
                 $taxRate = $product['tax'] ?? 0;
@@ -1127,8 +1149,9 @@ class ReportController extends Controller
         $startDate = $request['start_date'];
         $endDate = $request['end_date'];
 
-        $companyName = $this->businessSetting->where('key', 'restaurant_name')->first()->value ?? '';
-        $companyLogo = $this->businessSetting->where('key', 'logo')->first()->value ?? '';
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
 
         // Outward Supplies (Sales)
         $outwardQuery = $this->order->with(['details'])
