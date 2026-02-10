@@ -91,11 +91,8 @@ class PickingController extends Controller
             return redirect()->route('admin.picking.index');
         }
 
-        // If order status is confirmed, change it to picking and create picking items
-        if ($order->order_status === 'confirmed') {
-            $order->order_status = 'picking';
-            $order->save();
-
+        // Auto-create picking items if the order doesn't have any yet
+        if ($order->pickingItems->isEmpty()) {
             // Create picking items for each order detail
             foreach ($order->details as $detail) {
                 OrderPickingItem::create([
