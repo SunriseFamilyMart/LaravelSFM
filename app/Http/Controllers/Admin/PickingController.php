@@ -53,20 +53,40 @@ class PickingController extends Controller
             ->whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging']);
 
         // Date filter
-        if ($request->has('from') && $request->from) {
-            if ($request->has('to') && $request->to) {
-                // Both dates provided - use between
-                $query->whereBetween('created_at', [$request->from . ' 00:00:00', $request->to . ' 23:59:59']);
-                $queryParam['to'] = $to;
-            } else {
-                // Only from date - filter from this date onwards
-                $query->where('created_at', '>=', $request->from . ' 00:00:00');
+        if ($request->filled('from')) {
+            // Validate date format
+            try {
+                $fromDate = \Carbon\Carbon::parse($request->from)->format('Y-m-d');
+            } catch (\Exception $e) {
+                $fromDate = null;
             }
-            $queryParam['from'] = $from;
-        } elseif ($request->has('to') && $request->to) {
+            
+            if ($fromDate) {
+                if ($request->filled('to')) {
+                    // Both dates provided - use between
+                    try {
+                        $toDate = \Carbon\Carbon::parse($request->to)->format('Y-m-d');
+                        $query->whereBetween('created_at', [$fromDate . ' 00:00:00', $toDate . ' 23:59:59']);
+                        $queryParam['to'] = $to;
+                    } catch (\Exception $e) {
+                        // Invalid to date, just use from
+                        $query->where('created_at', '>=', $fromDate . ' 00:00:00');
+                    }
+                } else {
+                    // Only from date - filter from this date onwards
+                    $query->where('created_at', '>=', $fromDate . ' 00:00:00');
+                }
+                $queryParam['from'] = $from;
+            }
+        } elseif ($request->filled('to')) {
             // Only to date - filter up to this date
-            $query->where('created_at', '<=', $request->to . ' 23:59:59');
-            $queryParam['to'] = $to;
+            try {
+                $toDate = \Carbon\Carbon::parse($request->to)->format('Y-m-d');
+                $query->where('created_at', '<=', $toDate . ' 23:59:59');
+                $queryParam['to'] = $to;
+            } catch (\Exception $e) {
+                // Invalid date, skip filter
+            }
         }
 
         // Branch filter
@@ -232,10 +252,13 @@ class PickingController extends Controller
                 // Check if this item is marked as missing
                 if (in_array($pickingItem->id, $missingItems)) {
                     // Item is marked as missing
-                    $itemMissingQty = isset($missingQty[$pickingItem->id]) ? (int)$missingQty[$pickingItem->id] : 0;
+                    $itemMissingQty = isset($missingQty[$pickingItem->id]) ? (int)$missingQty[$pickingItem->id] : 1;
                     $itemMissingReason = $missingReason[$pickingItem->id] ?? null;
 
-                    // Validate missing qty
+                    // Validate missing qty - must be at least 1 and not exceed ordered qty
+                    if ($itemMissingQty < 1) {
+                        $itemMissingQty = 1;
+                    }
                     if ($itemMissingQty > $pickingItem->ordered_qty) {
                         $itemMissingQty = $pickingItem->ordered_qty;
                     }

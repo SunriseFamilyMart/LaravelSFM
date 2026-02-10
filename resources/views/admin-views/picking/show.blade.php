@@ -153,6 +153,7 @@
                                                                    min="1" 
                                                                    max="{{ $item->ordered_qty }}" 
                                                                    value="1"
+                                                                   required
                                                                    style="width: 120px;">
                                                         </div>
                                                         <div class="form-group">
