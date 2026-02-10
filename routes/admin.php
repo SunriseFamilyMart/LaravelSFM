@@ -298,6 +298,12 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::post('update-deliveryDate', [OrderController::class, 'updateDeliveryDate'])->name('update-deliveryDate');
         });
 
+        Route::group(['prefix' => 'picking', 'as' => 'picking.', 'middleware' => ['module:order_management']], function () {
+            Route::get('/', [PickingController::class, 'index'])->name('index');
+            Route::get('/export-pdf', [PickingController::class, 'exportPdf'])->name('export-pdf');
+            Route::get('/show/{id}', [PickingController::class, 'show'])->name('show');
+        });
+
         Route::group(['prefix' => 'category', 'as' => 'category.', 'middleware' => ['module:product_management']], function () {
             Route::get('add', [CategoryController::class, 'index'])->name('add');
             Route::get('add-sub-category', [CategoryController::class, 'subIndex'])->name('add-sub-category');
@@ -518,6 +524,17 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::get('expense', [ReportController::class, 'expenseIndex'])->name('expense');
             Route::get('expense-export-excel', [ReportController::class, 'expenseExportExcel'])->name('expense.export.excel');
             Route::get('expense-export-pdf', [ReportController::class, 'expenseSummaryPdf'])->name('expense.export.pdf');
+            
+            // Advanced Reports
+            Route::get('advanced-reports', [ReportController::class, 'advancedReportsIndex'])->name('advanced-reports');
+            Route::get('advanced-reports/sales', [ReportController::class, 'salesReportData'])->name('advanced-reports.sales');
+            Route::get('advanced-reports/purchase', [ReportController::class, 'purchaseReportData'])->name('advanced-reports.purchase');
+            Route::get('advanced-reports/gstr1', [ReportController::class, 'gstr1ReportData'])->name('advanced-reports.gstr1');
+            Route::get('advanced-reports/gstr3', [ReportController::class, 'gstr3ReportData'])->name('advanced-reports.gstr3');
+            Route::get('advanced-reports/sales/export-pdf', [ReportController::class, 'exportSalesReportPdf'])->name('advanced-reports.sales.export-pdf');
+            Route::get('advanced-reports/purchase/export-pdf', [ReportController::class, 'exportPurchaseReportPdf'])->name('advanced-reports.purchase.export-pdf');
+            Route::get('advanced-reports/gstr1/export-pdf', [ReportController::class, 'exportGstr1ReportPdf'])->name('advanced-reports.gstr1.export-pdf');
+            Route::get('advanced-reports/gstr3/export-pdf', [ReportController::class, 'exportGstr3ReportPdf'])->name('advanced-reports.gstr3.export-pdf');
         });
 
         Route::group(['prefix' => 'analytics', 'as' => 'analytics.', 'middleware' => ['module:report_management']], function () {

@@ -137,14 +137,14 @@
                                         </a>
                                     </li>
                                     <li
-                                        class="nav-item {{ Request::is('admin/orders/list/processing') ? 'active' : '' }}">
-                                        <a class="nav-link " href="{{ route('admin.orders.list', ['processing']) }}"
-                                            title="{{ translate('processing_orders') }}">
+                                        class="nav-item {{ Request::is('admin/picking*') ? 'active' : '' }}">
+                                        <a class="nav-link " href="{{ route('admin.picking.index') }}"
+                                            title="{{ translate('picking') }}">
                                             <span class="tio-circle nav-indicator-icon"></span>
                                             <span class="text-truncate  sidebar--badge-container">
                                                 <span>{{ translate('picking') }}</span>
                                                 <span class="badge badge-soft-warning badge-pill ml-1">
-                                                    {{ \App\Model\Order::where(['order_status' => 'processing'])->count() }}
+                                                    {{ \App\Model\Order::whereIn('order_status', ['pending', 'processing'])->count() }}
                                                 </span>
                                             </span>
                                         </a>
@@ -458,6 +458,15 @@
                                 <small class="nav-subtitle"
                                     title="Documentation">{{ translate('report_and_analytics') }}</small>
                                 <small class="tio-more-horizontal nav-subtitle-replacer"></small>
+                            </li>
+
+                            <li
+                                class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/advanced-reports*') ? 'active' : '' }}">
+                                <a class="nav-link " href="{{ route('admin.report.advanced-reports') }}"
+                                    title="{{ translate('Advanced Reports') }}">
+                                    <span class="tio-chart-bar-4 nav-icon"></span>
+                                    <span class="text-truncate">{{ translate('Advanced Reports') }}</span>
+                                </a>
                             </li>
 
                             <li

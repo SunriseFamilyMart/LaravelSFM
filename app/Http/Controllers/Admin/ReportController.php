@@ -626,4 +626,573 @@ class ReportController extends Controller
     // Redirect or return the file URL
     //return redirect($fileUrl);
 //}
+
+    /**
+     * Helper method to decode product details JSON
+     * @param mixed $productDetails
+     * @return array
+     */
+    private function decodeProductDetails($productDetails): array
+    {
+        return is_string($productDetails) 
+            ? json_decode($productDetails, true) 
+            : $productDetails;
+    }
+
+    /**
+     * Helper method to get company info for PDF
+     * @return array
+     */
+    private function getCompanyInfo(): array
+    {
+        $settings = $this->businessSetting->whereIn('key', ['restaurant_name', 'logo'])->get();
+        return [
+            'name' => $settings->where('key', 'restaurant_name')->first()->value ?? '',
+            'logo' => $settings->where('key', 'logo')->first()->value ?? '',
+        ];
+    }
+
+    /**
+     * Advanced Reports Index - Main page with tabs
+     * @param Request $request
+     * @return Factory|\Illuminate\Contracts\View\View|Application
+     */
+    public function advancedReportsIndex(Request $request): Factory|\Illuminate\Contracts\View\View|Application
+    {
+        $branches = $this->branch->all();
+        $reportType = $request->get('type', 'sales');
+        
+        return view('admin-views.report.advanced-reports', compact('branches', 'reportType'));
+    }
+
+    /**
+     * Sales Report Data
+     * @param Request $request
+     * @return Factory|\Illuminate\Contracts\View\View|Application|JsonResponse
+     */
+    public function salesReportData(Request $request)
+    {
+        $branches = $this->branch->all();
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        $query = $this->order->with(['details.product', 'branch'])
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                    ->whereDate('created_at', '<=', $endDate);
+            })
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            });
+
+        $orders = $query->get();
+
+        // Calculate totals
+        $totalOrders = $orders->count();
+        $totalAmount = $orders->sum('order_amount');
+        $totalTax = $orders->sum('total_tax_amount');
+        $totalDiscount = $orders->sum(function ($order) {
+            return $order->coupon_discount_amount + $order->extra_discount;
+        });
+
+        // Group by product for detailed breakdown
+        $salesByProduct = [];
+        foreach ($orders as $order) {
+            foreach ($order->details as $detail) {
+                $product = $this->decodeProductDetails($detail->product_details);
+                
+                $productId = $product['id'] ?? 'unknown';
+                $productName = $product['name'] ?? 'Unknown Product';
+                $hsnCode = $product['hsn_code'] ?? '';
+                
+                if (!isset($salesByProduct[$productId])) {
+                    $salesByProduct[$productId] = [
+                        'name' => $productName,
+                        'hsn_code' => $hsnCode,
+                        'quantity' => 0,
+                        'total_amount' => 0,
+                        'total_tax' => 0,
+                    ];
+                }
+                
+                $salesByProduct[$productId]['quantity'] += $detail->quantity;
+                $salesByProduct[$productId]['total_amount'] += ($detail->price - $detail->discount_on_product) * $detail->quantity;
+                $salesByProduct[$productId]['total_tax'] += $detail->tax_amount;
+            }
+        }
+
+        return view('admin-views.report.partials._sales_report', compact(
+            'orders', 
+            'salesByProduct', 
+            'totalOrders', 
+            'totalAmount', 
+            'totalTax', 
+            'totalDiscount',
+            'branches',
+            'branchId',
+            'startDate',
+            'endDate'
+        ));
+    }
+
+    /**
+     * Purchase Report Data
+     * @param Request $request
+     * @return Factory|\Illuminate\Contracts\View\View|Application
+     */
+    public function purchaseReportData(Request $request)
+    {
+        $branches = $this->branch->all();
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        // Using AdminPurchase model for purchase data
+        $purchases = \DB::table('adminpurchase')
+            ->join('products', 'adminpurchase.product_id', '=', 'products.id')
+            ->leftJoin('suppliers', 'adminpurchase.supplier_id', '=', 'suppliers.id')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('adminpurchase.purchase_date', '>=', $startDate)
+                    ->whereDate('adminpurchase.purchase_date', '<=', $endDate);
+            })
+            ->select(
+                'adminpurchase.*',
+                'products.name as product_name',
+                'products.hsn_code',
+                'products.tax',
+                'suppliers.name as supplier_name'
+            )
+            ->orderBy('adminpurchase.purchase_date', 'desc')
+            ->get();
+
+        // Calculate totals
+        $totalPurchases = $purchases->count();
+        $totalAmount = $purchases->sum('total_amount');
+        $totalPaid = $purchases->sum('paid_amount');
+        $totalBalance = $purchases->sum('balance_amount');
+
+        // Group by product
+        $purchasesByProduct = [];
+        foreach ($purchases as $purchase) {
+            $productId = $purchase->product_id;
+            if (!isset($purchasesByProduct[$productId])) {
+                $purchasesByProduct[$productId] = [
+                    'product_name' => $purchase->product_name,
+                    'hsn_code' => $purchase->hsn_code ?? '',
+                    'quantity' => 0,
+                    'total_amount' => 0,
+                    'tax_amount' => 0,
+                ];
+            }
+            
+            $purchasesByProduct[$productId]['quantity'] += $purchase->quantity;
+            $purchasesByProduct[$productId]['total_amount'] += $purchase->total_amount;
+            // Calculate tax - assuming total_amount is tax-inclusive
+            $taxRate = ($purchase->tax ?? 0) / 100;
+            $taxableAmount = $purchase->total_amount / (1 + $taxRate);
+            $taxAmount = $purchase->total_amount - $taxableAmount;
+            $purchasesByProduct[$productId]['tax_amount'] += $taxAmount;
+        }
+
+        return view('admin-views.report.partials._purchase_report', compact(
+            'purchases',
+            'purchasesByProduct',
+            'totalPurchases',
+            'totalAmount',
+            'totalPaid',
+            'totalBalance',
+            'branches',
+            'branchId',
+            'startDate',
+            'endDate'
+        ));
+    }
+
+    /**
+     * GSTR-1 Report Data (Outward Supplies)
+     * @param Request $request
+     * @return Factory|\Illuminate\Contracts\View\View|Application
+     */
+    public function gstr1ReportData(Request $request)
+    {
+        $branches = $this->branch->all();
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        $query = $this->order->with(['details.product', 'customer', 'branch'])
+            ->where('order_status', 'delivered')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                    ->whereDate('created_at', '<=', $endDate);
+            })
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            });
+
+        $orders = $query->get();
+
+        // Group by HSN code and tax rate
+        $gstrData = [];
+        foreach ($orders as $order) {
+            foreach ($order->details as $detail) {
+                $product = $this->decodeProductDetails($detail->product_details);
+                
+                $hsnCode = $product['hsn_code'] ?? 'N/A';
+                $taxRate = $product['tax'] ?? 0;
+                
+                $key = $hsnCode . '_' . $taxRate;
+                
+                if (!isset($gstrData[$key])) {
+                    $gstrData[$key] = [
+                        'hsn_code' => $hsnCode,
+                        'tax_rate' => $taxRate,
+                        'taxable_value' => 0,
+                        'cgst_amount' => 0,
+                        'sgst_amount' => 0,
+                        'total_tax' => 0,
+                        'total_value' => 0,
+                    ];
+                }
+                
+                $taxableValue = ($detail->price - $detail->discount_on_product) * $detail->quantity;
+                $totalTax = $detail->tax_amount;
+                
+                // Split GST into CGST and SGST (50-50 split)
+                $cgst = $totalTax / 2;
+                $sgst = $totalTax / 2;
+                
+                $gstrData[$key]['taxable_value'] += $taxableValue;
+                $gstrData[$key]['cgst_amount'] += $cgst;
+                $gstrData[$key]['sgst_amount'] += $sgst;
+                $gstrData[$key]['total_tax'] += $totalTax;
+                $gstrData[$key]['total_value'] += $taxableValue + $totalTax;
+            }
+        }
+
+        // Calculate grand totals
+        $grandTotalTaxable = array_sum(array_column($gstrData, 'taxable_value'));
+        $grandTotalCGST = array_sum(array_column($gstrData, 'cgst_amount'));
+        $grandTotalSGST = array_sum(array_column($gstrData, 'sgst_amount'));
+        $grandTotalTax = array_sum(array_column($gstrData, 'total_tax'));
+        $grandTotalValue = array_sum(array_column($gstrData, 'total_value'));
+
+        return view('admin-views.report.partials._gstr1_report', compact(
+            'gstrData',
+            'grandTotalTaxable',
+            'grandTotalCGST',
+            'grandTotalSGST',
+            'grandTotalTax',
+            'grandTotalValue',
+            'branches',
+            'branchId',
+            'startDate',
+            'endDate'
+        ));
+    }
+
+    /**
+     * GSTR-3 Report Data (Summary Report)
+     * @param Request $request
+     * @return Factory|\Illuminate\Contracts\View\View|Application
+     */
+    public function gstr3ReportData(Request $request)
+    {
+        $branches = $this->branch->all();
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        // Outward Supplies (Sales)
+        $outwardQuery = $this->order->with(['details'])
+            ->where('order_status', 'delivered')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                    ->whereDate('created_at', '<=', $endDate);
+            })
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            });
+
+        $outwardOrders = $outwardQuery->get();
+
+        // Calculate outward supplies
+        $outwardTaxable = 0;
+        $outwardCGST = 0;
+        $outwardSGST = 0;
+        $outwardTotalTax = 0;
+
+        foreach ($outwardOrders as $order) {
+            foreach ($order->details as $detail) {
+                $taxableValue = ($detail->price - $detail->discount_on_product) * $detail->quantity;
+                $totalTax = $detail->tax_amount;
+                
+                $outwardTaxable += $taxableValue;
+                $outwardCGST += $totalTax / 2;
+                $outwardSGST += $totalTax / 2;
+                $outwardTotalTax += $totalTax;
+            }
+        }
+
+        // Inward Supplies (Purchases)
+        $inwardPurchases = \DB::table('adminpurchase')
+            ->join('products', 'adminpurchase.product_id', '=', 'products.id')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('adminpurchase.purchase_date', '>=', $startDate)
+                    ->whereDate('adminpurchase.purchase_date', '<=', $endDate);
+            })
+            ->select('adminpurchase.*', 'products.tax')
+            ->get();
+
+        $inwardTaxable = 0;
+        $inwardCGST = 0;
+        $inwardSGST = 0;
+        $inwardTotalTax = 0;
+
+        foreach ($inwardPurchases as $purchase) {
+            $taxableValue = $purchase->total_amount / (1 + (($purchase->tax ?? 0) / 100));
+            $totalTax = $purchase->total_amount - $taxableValue;
+            
+            $inwardTaxable += $taxableValue;
+            $inwardCGST += $totalTax / 2;
+            $inwardSGST += $totalTax / 2;
+            $inwardTotalTax += $totalTax;
+        }
+
+        // Net tax liability
+        $netTaxLiability = $outwardTotalTax - $inwardTotalTax;
+
+        return view('admin-views.report.partials._gstr3_report', compact(
+            'outwardTaxable',
+            'outwardCGST',
+            'outwardSGST',
+            'outwardTotalTax',
+            'inwardTaxable',
+            'inwardCGST',
+            'inwardSGST',
+            'inwardTotalTax',
+            'netTaxLiability',
+            'branches',
+            'branchId',
+            'startDate',
+            'endDate'
+        ));
+    }
+
+    /**
+     * Export Sales Report PDF
+     * @param Request $request
+     * @return mixed
+     */
+    public function exportSalesReportPdf(Request $request)
+    {
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
+
+        $query = $this->order->with(['details.product', 'branch'])
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                    ->whereDate('created_at', '<=', $endDate);
+            })
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            });
+
+        $orders = $query->get();
+
+        $totalAmount = $orders->sum('order_amount');
+        $totalTax = $orders->sum('total_tax_amount');
+
+        $data = [
+            'orders' => $orders,
+            'total_amount' => $totalAmount,
+            'total_tax' => $totalTax,
+            'company_name' => $companyName,
+            'company_logo' => $companyLogo,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'branch_id' => $branchId,
+        ];
+
+        $pdf = PDF::loadView('admin-views.report.pdf.sales-report-pdf', compact('data'));
+        return $pdf->download('sales_report_' . date('Ymd_His') . '.pdf');
+    }
+
+    /**
+     * Export Purchase Report PDF
+     * @param Request $request
+     * @return mixed
+     */
+    public function exportPurchaseReportPdf(Request $request)
+    {
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
+
+        $purchases = \DB::table('adminpurchase')
+            ->join('products', 'adminpurchase.product_id', '=', 'products.id')
+            ->leftJoin('suppliers', 'adminpurchase.supplier_id', '=', 'suppliers.id')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('adminpurchase.purchase_date', '>=', $startDate)
+                    ->whereDate('adminpurchase.purchase_date', '<=', $endDate);
+            })
+            ->select(
+                'adminpurchase.*',
+                'products.name as product_name',
+                'products.hsn_code',
+                'suppliers.name as supplier_name'
+            )
+            ->get();
+
+        $totalAmount = $purchases->sum('total_amount');
+
+        $data = [
+            'purchases' => $purchases,
+            'total_amount' => $totalAmount,
+            'company_name' => $companyName,
+            'company_logo' => $companyLogo,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+
+        $pdf = PDF::loadView('admin-views.report.pdf.purchase-report-pdf', compact('data'));
+        return $pdf->download('purchase_report_' . date('Ymd_His') . '.pdf');
+    }
+
+    /**
+     * Export GSTR-1 Report PDF
+     * @param Request $request
+     * @return mixed
+     */
+    public function exportGstr1ReportPdf(Request $request)
+    {
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
+
+        $query = $this->order->with(['details.product'])
+            ->where('order_status', 'delivered')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                    ->whereDate('created_at', '<=', $endDate);
+            })
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            });
+
+        $orders = $query->get();
+
+        // Group by HSN code and tax rate
+        $gstrData = [];
+        foreach ($orders as $order) {
+            foreach ($order->details as $detail) {
+                $product = $this->decodeProductDetails($detail->product_details);
+                
+                $hsnCode = $product['hsn_code'] ?? 'N/A';
+                $taxRate = $product['tax'] ?? 0;
+                
+                $key = $hsnCode . '_' . $taxRate;
+                
+                if (!isset($gstrData[$key])) {
+                    $gstrData[$key] = [
+                        'hsn_code' => $hsnCode,
+                        'tax_rate' => $taxRate,
+                        'taxable_value' => 0,
+                        'cgst_amount' => 0,
+                        'sgst_amount' => 0,
+                        'total_tax' => 0,
+                    ];
+                }
+                
+                $taxableValue = ($detail->price - $detail->discount_on_product) * $detail->quantity;
+                $totalTax = $detail->tax_amount;
+                
+                $gstrData[$key]['taxable_value'] += $taxableValue;
+                $gstrData[$key]['cgst_amount'] += $totalTax / 2;
+                $gstrData[$key]['sgst_amount'] += $totalTax / 2;
+                $gstrData[$key]['total_tax'] += $totalTax;
+            }
+        }
+
+        $data = [
+            'gstr_data' => $gstrData,
+            'company_name' => $companyName,
+            'company_logo' => $companyLogo,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+
+        $pdf = PDF::loadView('admin-views.report.pdf.gstr1-report-pdf', compact('data'));
+        return $pdf->download('gstr1_report_' . date('Ymd_His') . '.pdf');
+    }
+
+    /**
+     * Export GSTR-3 Report PDF
+     * @param Request $request
+     * @return mixed
+     */
+    public function exportGstr3ReportPdf(Request $request)
+    {
+        $branchId = $request['branch_id'];
+        $startDate = $request['start_date'];
+        $endDate = $request['end_date'];
+
+        $companyInfo = $this->getCompanyInfo();
+        $companyName = $companyInfo['name'];
+        $companyLogo = $companyInfo['logo'];
+
+        // Outward Supplies (Sales)
+        $outwardQuery = $this->order->with(['details'])
+            ->where('order_status', 'delivered')
+            ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
+                return $query->whereDate('created_at', '>=', $startDate)
+                    ->whereDate('created_at', '<=', $endDate);
+            })
+            ->when(!is_null($branchId) && $branchId != 'all', function ($query) use ($branchId) {
+                return $query->where('branch_id', $branchId);
+            });
+
+        $outwardOrders = $outwardQuery->get();
+
+        $outwardTaxable = 0;
+        $outwardCGST = 0;
+        $outwardSGST = 0;
+
+        foreach ($outwardOrders as $order) {
+            foreach ($order->details as $detail) {
+                $taxableValue = ($detail->price - $detail->discount_on_product) * $detail->quantity;
+                $totalTax = $detail->tax_amount;
+                
+                $outwardTaxable += $taxableValue;
+                $outwardCGST += $totalTax / 2;
+                $outwardSGST += $totalTax / 2;
+            }
+        }
+
+        $data = [
+            'outward_taxable' => $outwardTaxable,
+            'outward_cgst' => $outwardCGST,
+            'outward_sgst' => $outwardSGST,
+            'company_name' => $companyName,
+            'company_logo' => $companyLogo,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+
+        $pdf = PDF::loadView('admin-views.report.pdf.gstr3-report-pdf', compact('data'));
+        return $pdf->download('gstr3_report_' . date('Ymd_His') . '.pdf');
+    }
 }
