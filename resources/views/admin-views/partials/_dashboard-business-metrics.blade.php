@@ -4,7 +4,7 @@
         <h2 class="title text-white">
             {{ Helpers::set_symbol(number_format($metrics['total_sales'], 2)) }}
         </h2>
-        <img src="{{asset('/public/assets/admin/img/dashboard/sales.png')}}" alt="" class="dashboard-icon">
+        <img src="{{asset('/public/assets/admin/img/dashboard/1.png')}}" alt="" class="dashboard-icon">
     </div>
 </div>
 
@@ -14,7 +14,7 @@
         <h2 class="title text-white">
             {{ Helpers::set_symbol(number_format($metrics['total_purchases'], 2)) }}
         </h2>
-        <img src="{{asset('/public/assets/admin/img/dashboard/purchases.png')}}" alt="" class="dashboard-icon">
+        <img src="{{asset('/public/assets/admin/img/dashboard/2.png')}}" alt="" class="dashboard-icon">
     </div>
 </div>
 
@@ -24,7 +24,7 @@
         <h2 class="title text-white">
             {{ $metrics['total_orders'] }}
         </h2>
-        <img src="{{asset('/public/assets/admin/img/dashboard/orders.png')}}" alt="" class="dashboard-icon">
+        <img src="{{asset('/public/assets/admin/img/dashboard/3.png')}}" alt="" class="dashboard-icon">
     </div>
 </div>
 
@@ -34,7 +34,7 @@
         <h2 class="title text-white">
             {{ $metrics['delivered_orders'] }}
         </h2>
-        <img src="{{asset('/public/assets/admin/img/dashboard/delivered.png')}}" alt="" class="dashboard-icon">
+        <img src="{{asset('/public/assets/admin/img/dashboard/4.png')}}" alt="" class="dashboard-icon">
     </div>
 </div>
 
@@ -44,7 +44,7 @@
         <h2 class="title text-white">
             {{ Helpers::set_symbol(number_format($metrics['profit'], 2)) }}
         </h2>
-        <img src="{{asset('/public/assets/admin/img/dashboard/profit.png')}}" alt="" class="dashboard-icon">
+        <img src="{{asset('/public/assets/admin/img/dashboard/confirmed.png')}}" alt="" class="dashboard-icon">
     </div>
 </div>
 
@@ -54,6 +54,6 @@
         <h2 class="title text-white">
             {{ number_format($metrics['margin'], 2) }}%
         </h2>
-        <img src="{{asset('/public/assets/admin/img/dashboard/margin.png')}}" alt="" class="dashboard-icon">
+        <img src="{{asset('/public/assets/admin/img/dashboard/pending.png')}}" alt="" class="dashboard-icon">
     </div>
 </div>
