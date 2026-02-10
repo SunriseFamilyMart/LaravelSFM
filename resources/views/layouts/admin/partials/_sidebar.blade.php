@@ -662,6 +662,47 @@
                                     </span>
                                 </a>
                             </li>
+
+                            <li
+                                class="navbar-vertical-aside-has-menu {{ Request::is('admin/attendance*') ? 'active' : '' }}">
+                                <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"
+                                    href="javascript:" title="{{ translate('Attendance') }}">
+                                    <i class="tio-time nav-icon"></i>
+                                    <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                        {{ translate('Attendance') }}
+                                    </span>
+                                </a>
+                                <ul class="js-navbar-vertical-aside-submenu nav nav-sub"
+                                    style="display: {{ Request::is('admin/attendance*') ? 'block' : 'none' }}">
+                                    <li class="nav-item {{ Request::is('admin/attendance') && !Request::is('admin/attendance/*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('admin.attendance.index') }}"
+                                            title="{{ translate('Attendance List') }}">
+                                            <span class="tio-circle nav-indicator-icon"></span>
+                                            <span class="text-truncate">
+                                                {{ translate('Attendance List') }}
+                                            </span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item {{ Request::is('admin/attendance/check-in-out') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('admin.attendance.check-in-out') }}"
+                                            title="{{ translate('Check In/Out') }}">
+                                            <span class="tio-circle nav-indicator-icon"></span>
+                                            <span class="text-truncate">
+                                                {{ translate('Check In/Out') }}
+                                            </span>
+                                        </a>
+                                    </li>
+                                    <li class="nav-item {{ Request::is('admin/attendance/monthly-report') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('admin.attendance.monthly-report') }}"
+                                            title="{{ translate('Monthly Report') }}">
+                                            <span class="tio-circle nav-indicator-icon"></span>
+                                            <span class="text-truncate">
+                                                {{ translate('Monthly Report') }}
+                                            </span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
                             </li>
                         @endif
 

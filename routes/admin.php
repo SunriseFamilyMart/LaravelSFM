@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\DeliveryTripController;
 use App\Http\Controllers\Admin\RolesAccessController;
 use App\Http\Controllers\Admin\PickingController;
+use App\Http\Controllers\Admin\AttendanceController;
 
 
 
@@ -118,6 +119,16 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
             Route::get('status/{id}/{status}', [EmployeeController::class, 'status'])->name('status');
             Route::delete('delete/{id}', [EmployeeController::class, 'delete'])->name('delete');
             Route::get('export', [EmployeeController::class, 'export'])->name('export');
+        });
+
+        Route::group(['prefix' => 'attendance', 'as' => 'attendance.', 'middleware' => ['module:user_management']], function () {
+            Route::get('/', [AttendanceController::class, 'index'])->name('index');
+            Route::get('check-in-out', [AttendanceController::class, 'checkInOut'])->name('check-in-out');
+            Route::post('check-in', [AttendanceController::class, 'checkIn'])->name('check-in');
+            Route::post('check-out', [AttendanceController::class, 'checkOut'])->name('check-out');
+            Route::get('monthly-report', [AttendanceController::class, 'monthlyReport'])->name('monthly-report');
+            Route::get('export-excel', [AttendanceController::class, 'exportExcel'])->name('export-excel');
+            Route::get('export-pdf', [AttendanceController::class, 'exportPdf'])->name('export-pdf');
         });
         Route::group(['prefix' => 'pos', 'as' => 'pos.', 'middleware' => ['module:pos_management']], function () {
             Route::get('/', [POSController::class, 'index'])->name('index');
