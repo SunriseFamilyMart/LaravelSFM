@@ -42,6 +42,33 @@
                 </div>
             </div>
 
+            <div class="card mb-10px">
+                <div class="card-body">
+                    <div class="btn--container justify-content-between align-items-center mb-2 pb-1">
+                        <h5 class="card-title mb-2">
+                            <img src="{{ asset('/public/assets/admin/img/business-analytics.png') }}" alt=""
+                                class="card-icon">
+                            {{ translate('Business Metrics') }}
+                        </h5>
+                        <div class="mb-2 d-flex gap-2">
+                            <input type="date" class="form-control" id="metrics_date_from" placeholder="{{ translate('From Date') }}">
+                            <input type="date" class="form-control" id="metrics_date_to" placeholder="{{ translate('To Date') }}">
+                            <select class="custom-select" id="metrics_branch_id">
+                                <option value="">{{ translate('All Branches') }}</option>
+                                @foreach($data['branches'] as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                            <button class="btn btn-primary" id="apply_metrics_filter">{{ translate('Apply') }}</button>
+                        </div>
+                    </div>
+                    <div class="row g-2" id="business_metrics">
+                        @include('admin-views.partials._dashboard-business-metrics', ['metrics' => $data['business_metrics']])
+                    </div>
+                </div>
+            </div>
+
+
             <div class="dashboard-statistics">
                 <div class="row g-1">
                     <div class="col-lg-8 col--xl-8">
@@ -437,6 +464,36 @@
         }
 
         Chart.plugins.unregister(ChartDataLabels);
+
+        // Business metrics filter
+        $('#apply_metrics_filter').on('click', function() {
+            updateBusinessMetrics();
+        });
+
+        function updateBusinessMetrics() {
+            $.ajax({
+                url: "{{ route('admin.dashboard.business-metrics') }}",
+                type: "get",
+                data: {
+                    date_from: $('#metrics_date_from').val(),
+                    date_to: $('#metrics_date_to').val(),
+                    branch_id: $('#metrics_branch_id').val(),
+                },
+                beforeSend: function() {
+                    $('#loading').show()
+                },
+                success: function(data) {
+                    $('#business_metrics').html(data.view)
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error('Error updating business metrics:', errorThrown);
+                    toastr.error('{{ translate("Failed to update business metrics. Please try again.") }}');
+                },
+                complete: function() {
+                    $('#loading').hide()
+                }
+            });
+        }
 
         function orderStatisticsUpdate(value) {
 

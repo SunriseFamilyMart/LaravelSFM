@@ -11,6 +11,7 @@ use App\Model\Order;
 use App\Model\OrderDetail;
 use App\Model\Product;
 use App\Model\Review;
+use App\Models\AdminPurchase;
 use App\User;
 use Carbon\CarbonPeriod;
 use Illuminate\Contracts\Foundation\Application;
@@ -31,7 +32,8 @@ class DashboardController extends Controller
        private OrderDetail $orderDetail,
        private Product $product,
        private Review $review,
-       private User $user
+       private User $user,
+       private AdminPurchase $adminPurchase
     ){}
 
     /**
@@ -107,10 +109,18 @@ class DashboardController extends Controller
 
         $data['recent_orders'] = $this->order->notPos()->latest()->take(5)->get(['id', 'created_at', 'order_status']);
 
+        // Business metrics - keep as separate array for clarity
+        $data['business_metrics'] = self::fetchBusinessMetrics();
+        
+        // Also merge individual metrics for backward compatibility
+        $data = array_merge($data, $data['business_metrics']);
 
         $data['top_sell'] = $topSell;
         $data['most_rated_products'] = $mostRatedProducts;
         $data['top_customer'] = $topCustomer;
+        
+        // Get all branches for filter
+        $data['branches'] = $this->branch->get(['id', 'name']);
 
         $from = \Carbon\Carbon::now()->startOfYear()->format('Y-m-d');
         $to = Carbon::now()->endOfYear()->format('Y-m-d');
@@ -483,6 +493,157 @@ class DashboardController extends Controller
             'earning' => array_values($earning_data_final),
         );
         return response()->json($data);
+    }
+
+    /**
+     * Get business metrics for dashboard (private helper)
+     */
+    private function fetchBusinessMetrics(Request $request = null): array
+    {
+        $dateFrom = $request?->input('date_from');
+        $dateTo = $request?->input('date_to');
+        $branchId = $request?->input('branch_id');
+
+        // Validate date inputs to prevent injection
+        if ($dateFrom && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+            $dateFrom = null;
+        }
+        if ($dateTo && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+            $dateTo = null;
+        }
+        
+        // Validate branch_id is numeric
+        if ($branchId && !is_numeric($branchId)) {
+            $branchId = null;
+        }
+
+        // Base query with filters
+        $orderQuery = $this->order->query();
+        $purchaseQuery = $this->adminPurchase->query();
+
+        if ($dateFrom && $dateTo) {
+            // Use Carbon for safer date handling
+            try {
+                $dateFromCarbon = Carbon::parse($dateFrom)->startOfDay();
+                $dateToCarbon = Carbon::parse($dateTo)->endOfDay();
+                $orderQuery->whereBetween('created_at', [$dateFromCarbon, $dateToCarbon]);
+                $purchaseQuery->whereBetween('created_at', [$dateFromCarbon, $dateToCarbon]);
+            } catch (\Exception $e) {
+                // Invalid date format, skip date filtering
+            }
+        }
+
+        if ($branchId) {
+            $orderQuery->where('branch_id', (int)$branchId);
+        }
+
+        // Total Sales (from delivered orders)
+        $totalSales = (clone $orderQuery)
+            ->where('order_status', 'delivered')
+            ->sum('order_amount');
+
+        // Total Purchases
+        $totalPurchases = (clone $purchaseQuery)
+            ->sum('total_amount');
+
+        // Total Orders
+        $totalOrders = (clone $orderQuery)->count();
+
+        // Delivered Orders
+        $deliveredOrders = (clone $orderQuery)
+            ->where('order_status', 'delivered')
+            ->count();
+
+        // Calculate Profit and Margin
+        $profitData = $this->calculateProfitAndMargin($orderQuery);
+
+        return [
+            'total_sales' => round($totalSales ?? 0, 2),
+            'total_purchases' => round($totalPurchases ?? 0, 2),
+            'total_orders' => $totalOrders ?? 0,
+            'delivered_orders' => $deliveredOrders ?? 0,
+            'profit' => $profitData['profit'] ?? 0,
+            'margin' => $profitData['margin'] ?? 0,
+        ];
+    }
+
+    /**
+     * Calculate profit and margin
+     */
+    private function calculateProfitAndMargin($orderQuery): array
+    {
+        // Get delivered orders with their details
+        $deliveredOrders = (clone $orderQuery)
+            ->where('order_status', 'delivered')
+            ->with(['details.product'])
+            ->get();
+
+        // Collect all unique product IDs from order details
+        $productIds = [];
+        foreach ($deliveredOrders as $order) {
+            foreach ($order->details as $detail) {
+                if ($detail->product_id) {
+                    $productIds[] = $detail->product_id;
+                }
+            }
+        }
+        $productIds = array_unique($productIds);
+
+        // Fetch all latest purchase prices at once to avoid N+1 query problem
+        $purchasePrices = [];
+        if (!empty($productIds)) {
+            $latestPurchases = $this->adminPurchase
+                ->whereIn('product_id', $productIds)
+                ->select('product_id', 'purchase_price', 'created_at')
+                ->get()
+                ->groupBy('product_id')
+                ->map(function ($purchases) {
+                    return $purchases->sortByDesc('created_at')->first();
+                });
+
+            foreach ($latestPurchases as $productId => $purchase) {
+                $purchasePrices[$productId] = $purchase->purchase_price ?? 0;
+            }
+        }
+
+        $totalRevenue = 0;
+        $totalCost = 0;
+
+        foreach ($deliveredOrders as $order) {
+            foreach ($order->details as $detail) {
+                $quantity = $detail->quantity ?? 0;
+                $sellingPrice = $detail->price ?? 0;
+                
+                // Revenue from this order detail
+                $totalRevenue += $sellingPrice * $quantity;
+
+                // Get purchase price from pre-loaded array
+                $purchasePrice = $purchasePrices[$detail->product_id] ?? 0;
+
+                // Cost for this order detail
+                $totalCost += $purchasePrice * $quantity;
+            }
+        }
+
+        $profit = $totalRevenue - $totalCost;
+        $margin = $totalRevenue > 0 ? ($profit / $totalRevenue) * 100 : 0;
+
+        return [
+            'profit' => round($profit, 2),
+            'margin' => round($margin, 2),
+        ];
+    }
+
+    /**
+     * Get business metrics via AJAX
+     */
+    public function getBusinessMetrics(Request $request): JsonResponse
+    {
+        $metrics = $this->fetchBusinessMetrics($request);
+        
+        return response()->json([
+            'view' => view('admin-views.partials._dashboard-business-metrics', compact('metrics'))->render()
+        ], 200);
     }
 
 }
