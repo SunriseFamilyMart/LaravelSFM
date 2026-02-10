@@ -129,7 +129,7 @@
                                     href={{ route('admin.orders.generate-invoice', [$order['id']]) }}>
                                     <i class="tio-print mr-1"></i> {{ translate('print') }} {{ translate('invoice') }}
                                 </a>
-                                @if($order->creditNotes && $order->creditNotes->count())
+                               @if($order->creditNotes?->isNotEmpty())
                                     <a class="btn btn-warning" target="_blank"
                                         href="{{ route('admin.credit-note.show', $order->creditNotes->first()->id) }}">
                                         <i class="tio-receipt"></i> Credit Note
@@ -317,17 +317,21 @@
                                                 @php($subTotal += $price_after_discount)
     <h5>{{ Helpers::set_symbol($detail['price'] * $detail['quantity'] - $detail['discount_on_product'] * $detail['quantity']) }}</h5>
 </td>
-@if(in_array($order->order_status, ['returned','partial_delivered']))
 <td class="text-center">
+@if(in_array($order->order_status, ['returned','partial_delivered']))
     <input type="checkbox"
            class="return-checkbox"
-           value="{{ $detail->id }}">
-</td>
+           data-detail-id="{{ $detail->id }}"
+           data-max-qty="{{ $detail->quantity }}">
+
+    <input type="number"
+           class="form-control mt-1 return-qty"
+           min="1"
+           max="{{ $detail->quantity }}"
+           value="1"
+           style="width:70px;margin:auto;">
 @endif
-
-
-                                            </td>
-                                            
+</td>                
 
                                         </tr>
                                     @endif
@@ -338,26 +342,36 @@
                                     </td>
                                 </tr>
                             </table>
-                            @if(in_array($order->order_status, ['returned','partial_delivered']))
-<div class="text-right mt-3">
+                           @if(in_array($order->order_status, ['returned','partial_delivered']))
+<div class="text-right mt-3" id="return-action-buttons">
 
-    <button class="btn btn-danger"
-        onclick="processSelectedReturns('damaged')">
+    <button class="btn btn-danger return-action" data-reason="damaged">
         Damaged
     </button>
 
-    <button class="btn btn-warning"
-        onclick="processSelectedReturns('expired')">
+    <button class="btn btn-warning return-action" data-reason="expired">
         Expired
     </button>
 
-    <button class="btn btn-success"
-        onclick="processSelectedReturns('restock')">
+    <button class="btn btn-success return-action" data-reason="restock">
         Restock
     </button>
 
+    @if($order->creditNotes?->isNotEmpty())
+        @php($note = $order->creditNotes->last())
+        <a class="btn btn-info" target="_blank"
+           href="{{ route('admin.credit-note.show', $note->id) }}">
+            View Credit Note (GST)
+        </a>
+
+        <a class="btn btn-primary" target="_blank"
+           href="{{ route('admin.credit-note.pdf', $note->id) }}">
+            Download PDF
+        </a>
+    @endif
 </div>
 @endif
+
 
                         </div>
 
@@ -1442,41 +1456,7 @@
             verify_offline_payment(status);
         });
 
-       function processSelectedReturns(reason) {
-
-    let selected = [];
-
-    document.querySelectorAll('.return-checkbox:checked')
-        .forEach(cb => selected.push(cb.value));
-
-    if(selected.length === 0){
-        alert("Select items first");
-        return;
-    }
-
-    if(!confirm("Generate credit note?")) return;
-
-    fetch("{{ route('admin.orders.credit-note.create') }}", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-TOKEN": "{{ csrf_token() }}"
-        },
-        body: JSON.stringify({
-            order_id: {{ $order->id }},
-            reason: reason,
-            items: selected.map(id => ({
-                detail_id: id,
-                qty: 1
-            }))
-        })
-    })
-    .then(res => res.json())
-    .then(() => {
-        alert("Credit note created");
-        location.reload();
-    });
-}
+      
 
 
 
@@ -1575,6 +1555,86 @@
                 ProgressBar: true
             });
         }
+       
+        // ================= RETURN / CREDIT NOTE UI =================
+
+        let returnLocked = false;
+
+document.querySelectorAll('.return-action').forEach(button => {
+
+    button.addEventListener('click', function () {
+
+        if (returnLocked) return;
+
+        const reason = this.dataset.reason;
+        let items = [];
+
+        document.querySelectorAll('.return-checkbox:checked').forEach(cb => {
+            const qtyInput = cb.closest('td').querySelector('.return-qty');
+            const qty = parseInt(qtyInput.value);
+
+            if (qty > 0) {
+                items.push({
+                    detail_id: cb.dataset.detailId,
+                    qty: qty
+                });
+            }
+        });
+
+        if (items.length === 0) {
+            alert("Please select at least one item");
+            return;
+        }
+
+        if (!confirm("Generate credit note for selected items?")) {
+            return;
+        }
+
+        // 🔒 LOCK UI (IMPORTANT)
+        returnLocked = true;
+
+        document.querySelectorAll('.return-action').forEach(btn => btn.disabled = true);
+        document.querySelectorAll('.return-checkbox').forEach(el => el.disabled = true);
+        document.querySelectorAll('.return-qty').forEach(el => el.disabled = true);
+
+        fetch("{{ route('admin.orders.returns.process') }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN": "{{ csrf_token() }}"
+            },
+            body: JSON.stringify({
+                order_id: {{ $order->id }},
+                reason: reason,
+                items: items
+            })
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (res.status) {
+                alert("Credit note generated successfully");
+                location.reload();
+            } else {
+                alert(res.message || "Failed to process return");
+                returnLocked = false;
+                enableReturnUI();
+            }
+        })
+        .catch(() => {
+            alert("Server error");
+            returnLocked = false;
+            enableReturnUI();
+        });
+    });
+
+});
+
+function enableReturnUI() {
+    document.querySelectorAll('.return-action').forEach(btn => btn.disabled = false);
+    document.querySelectorAll('.return-checkbox').forEach(el => el.disabled = false);
+    document.querySelectorAll('.return-qty').forEach(el => el.disabled = false);
+}
+
 
         $(document).on('change', '#from_date', function() {
             var id = $(this).attr("data-id");

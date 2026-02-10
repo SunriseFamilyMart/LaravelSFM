@@ -61,99 +61,155 @@ class Helpers
         return self::set_price($result);
     }
 
-    public static function product_data_formatting($data, $multi_data = false)
-    {
-        $storage = [];
-        if ($multi_data == true) {
-            foreach ($data as $item) {
-                $variations = [];
-                $item['category_ids'] = json_decode($item['category_ids']);
-                $item['image'] = json_decode($item['image']);
-                $item['attributes'] = json_decode($item['attributes']);
-                $item['choice_options'] = json_decode($item['choice_options']);
-
-                $categories = gettype($item['category_ids']) == 'array' ? $item['category_ids'] : json_decode($item['category_ids']);
-                if (!is_null($categories) && count($categories) > 0) {
-                    $ids = [];
-                    foreach ($categories as $value) {
-                        if ($value->position == 1) {
-                            $ids[] = $value->id;
-                        }
-                    }
-                    $item['category_discount'] = CategoryDiscount::active()->where('category_id', $ids)->first();
-                } else {
-                    $item['category_discount'] = [];
-                }
-
-                $variations = [];
-
-                $decoded = json_decode($item['variations'], true);
-
-                if (is_array($decoded)) {
-                    foreach ($decoded as $var) {
-                        $variations[] = [
-                            'type' => $var['type'] ?? null,
-                            'price' => isset($var['price']) ? (float) $var['price'] : 0,
-                            'stock' => isset($var['stock']) ? (int) $var['stock'] : 0,
-                        ];
-                    }
-                }
-
-                $item['variations'] = $variations;
 
 
-                if (count($item['translations'])) {
-                    foreach ($item['translations'] as $translation) {
-                        if ($translation->key == 'name') {
-                            $item['name'] = $translation->value;
-                        }
-                        if ($translation->key == 'description') {
-                            $item['description'] = $translation->value;
-                        }
-                    }
-                }
-                unset($item['translations']);
-                array_push($storage, $item);
-            }
-            $data = $storage;
-        } else {
-            $variations = [];
-            $data['category_ids'] = gettype($data['category_ids']) == 'array' ? $data['category_ids'] : json_decode($data['category_ids']);
-            $data['image'] = gettype($data['image']) == 'array' ? $data['image'] : json_decode($data['image']);
-            $data['attributes'] = gettype($data['attributes']) == 'array' ? $data['attributes'] : json_decode($data['attributes']);
-            $data['choice_options'] = gettype($data['choice_options']) == 'array' ? $data['choice_options'] : json_decode($data['choice_options']);
+  public static function product_data_formatting($data, $multi_data = false)
+{
+    \Log::info('PDF ENTRY', [
+        'multi_data' => $multi_data,
+        'data_type'  => gettype($data),
+        'count'      => is_countable($data) ? count($data) : null,
+    ]);
 
-            $categories = gettype($data['category_ids']) == 'array' ? $data['category_ids'] : json_decode($data['category_ids'], true);
+    $storage = [];
+
+    if ($multi_data === true) {
+
+        foreach ($data as $index => $item) {
+
+            \Log::info('PDF PRODUCT RAW', [
+                'index' => $index,
+                'id'    => $item['id'] ?? null,
+                'moq_column_exists' => is_array($item) && array_key_exists('minimum_order_quantity', $item),
+                'moq_raw_value'     => $item['minimum_order_quantity'] ?? 'NOT_SET',
+            ]);
+
+            // ===== JSON DECODE =====
+            $item['category_ids']   = json_decode($item['category_ids'] ?? '[]');
+            $item['image']          = json_decode($item['image'] ?? '[]');
+            $item['attributes']     = json_decode($item['attributes'] ?? '[]');
+            $item['choice_options'] = json_decode($item['choice_options'] ?? '[]');
+
+            // ===== BRANCH (TEMP – FOR LOGGING) =====
+            $branch = 'Nelamangala';
+
+            // ===== STOCK QUERY WITH LOG =====
+            $stockQuery = \DB::table('inventory_transactions')
+                ->where('product_id', $item['id'])
+                ->whereRaw('TRIM(UPPER(branch)) = TRIM(UPPER(?))', [$branch]);
+
+            \Log::info('PDF STOCK QUERY', [
+                'product_id' => $item['id'],
+                'branch_used' => $branch,
+                'rows_found' => $stockQuery->count(),
+            ]);
+
+            $item['stock'] = (int) $stockQuery->sum('remaining_qty');
+
+            \Log::info('PDF STOCK RESULT', [
+                'product_id' => $item['id'],
+                'stock'      => $item['stock'],
+            ]);
+
+            // ===== MOQ FIX + LOG =====
+            $dbMoq = \DB::table('products')
+                ->where('id', $item['id'])
+                ->value('minimum_order_quantity');
+
+            $item['minimum_order_quantity'] = (int) (
+                $item['minimum_order_quantity']
+                ?? $dbMoq
+                ?? 1
+            );
+
+            $item['maximum_order_quantity'] = (int) (
+                $item['maximum_order_quantity']
+                ?? \DB::table('products')
+                    ->where('id', $item['id'])
+                    ->value('maximum_order_quantity')
+                ?? 0
+            );
+
+            \Log::info('PDF MOQ FINAL', [
+                'product_id'   => $item['id'],
+                'moq_from_db'  => $dbMoq,
+                'moq_final'    => $item['minimum_order_quantity'],
+            ]);
+
+            // ===== CATEGORY =====
+            $categories = $item['category_ids'];
 
             if (!is_null($categories) && count($categories) > 0) {
                 $ids = [];
                 foreach ($categories as $value) {
-                    $value = (array) $value;
-                    if ($value['position'] == 1) {
-                        $ids[] = $value['id'];
+                    if (isset($value->position) && $value->position == 1) {
+                        $ids[] = $value->id;
                     }
                 }
-                $data['category_discount'] = CategoryDiscount::active()->where('category_id', $ids)->first();
+
+                $item['category_discount'] =
+                    \App\Model\CategoryDiscount::active()
+                        ->whereIn('category_id', $ids)
+                        ->first();
             } else {
-                $data['category_discount'] = [];
+                $item['category_discount'] = [];
             }
 
-            $data['variations'] = gettype($data['variations']) == 'array' ? $data['variations'] : json_decode($data['variations']);
+            // ===== VARIATIONS =====
+            $variations = [];
+            $decoded = json_decode($item['variations'] ?? '[]', true);
 
-            if (count($data['translations']) > 0) {
-                foreach ($data['translations'] as $translation) {
-                    if ($translation->key == 'name') {
-                        $data['name'] = $translation->value;
+            \Log::info('PDF VARIATIONS', [
+                'product_id'      => $item['id'],
+                'variation_count' => is_array($decoded) ? count($decoded) : 0
+            ]);
+
+            if (is_array($decoded)) {
+                foreach ($decoded as $var) {
+                    $variations[] = [
+                        'type'  => $var['type'] ?? null,
+                        'price' => (float) ($var['price'] ?? 0),
+                        'stock' => (int) ($var['stock'] ?? 0),
+                    ];
+                }
+            }
+
+            $item['variations'] = $variations;
+
+            // ===== TRANSLATIONS =====
+            if (!empty($item['translations'])) {
+                foreach ($item['translations'] as $translation) {
+                    if ($translation->key === 'name') {
+                        $item['name'] = $translation->value;
                     }
-                    if ($translation->key == 'description') {
-                        $data['description'] = $translation->value;
+                    if ($translation->key === 'description') {
+                        $item['description'] = $translation->value;
                     }
                 }
             }
+
+            unset($item['translations']);
+
+            \Log::info('PDF PRODUCT FINAL', [
+                'product_id' => $item['id'],
+                'stock'      => $item['stock'],
+                'moq'        => $item['minimum_order_quantity'],
+            ]);
+
+            $storage[] = $item;
         }
 
-        return $data;
+        \Log::info('PDF END MULTI', [
+            'final_count' => count($storage)
+        ]);
+
+        return $storage;
     }
+
+    \Log::info('PDF END SINGLE');
+    return $data;
+}
+
 
     public static function order_details_formatter($product)
     {

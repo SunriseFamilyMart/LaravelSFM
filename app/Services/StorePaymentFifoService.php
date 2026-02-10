@@ -1,11 +1,22 @@
+<?php
+
 namespace App\Services;
 
 use App\Models\Order;
-use App\Models\OrderPayment;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class StorePaymentFifoService
 {
+    /**
+     * Apply a store payment using FIFO (oldest orders first)
+     *
+     * @param int $storeId
+     * @param float $amount  Total amount PAID by store
+     * @param string $method Payment method (cash / upi / bank / cheque)
+     * @param string|null $txnId Transaction reference
+     * @param int $userId Logged-in user (deliveryman / admin)
+     */
     public static function apply(
         int $storeId,
         float $amount,
@@ -16,76 +27,132 @@ class StorePaymentFifoService
         DB::beginTransaction();
 
         try {
+            Log::info('FIFO store payment started', compact(
+                'storeId', 'amount', 'method', 'txnId', 'userId'
+            ));
+
+            /* =====================================================
+             | 1️⃣ CREATE ONE PAYMENT LEDGER (ACTUAL PAYMENT EVENT)
+             ===================================================== */
+            $paymentLedgerId = DB::table('payment_ledgers')->insertGetId([
+                'store_id'        => $storeId,
+                'entry_type'      => 'CREDIT', // Store paid us
+                'amount'          => $amount,  // FULL payment amount
+                'payment_method'  => $method,
+                'transaction_ref' => $txnId,
+                'remarks'         => 'Store payment (FIFO allocation)',
+                'created_at'      => now(),
+                'updated_at'      => now(),
+            ]);
+
+            Log::info('Payment ledger created', [
+                'payment_ledger_id' => $paymentLedgerId,
+                'amount' => $amount
+            ]);
+
+            /* =====================================================
+             | 2️⃣ FETCH OLD ORDERS (FIFO)
+             ===================================================== */
             $orders = Order::where('store_id', $storeId)
                 ->whereIn('payment_status', ['unpaid', 'partial'])
                 ->orderBy('created_at')
                 ->lockForUpdate()
                 ->get();
 
+            $remainingAmount = $amount;
+
             foreach ($orders as $order) {
-                if ($amount <= 0) break;
 
-                $orderTotal = $order->order_amount + $order->total_tax_amount;
-                $paid = OrderPayment::where('order_id', $order->id)
-                    ->where('payment_status', 'complete')
-                    ->sum('amount');
+                if ($remainingAmount <= 0) {
+                    break;
+                }
 
-                $due = $orderTotal - $paid;
-                if ($due <= 0) continue;
+                $orderTotal  = $order->order_amount + $order->total_tax_amount;
+                $alreadyPaid = $order->paid_amount ?? 0;
+                $due         = $orderTotal - $alreadyPaid;
 
-                $payNow = min($amount, $due);
+                if ($due <= 0) {
+                    continue;
+                }
 
-                // 1️⃣ Order payment
-                OrderPayment::create([
-                    'order_id' => $order->id,
-                    'store_id' => $storeId,
-                    'amount' => $payNow,
-                    'payment_method' => $method,
-                    'transaction_id' => $txnId,
-                    'payment_status' => 'complete'
+                $payNow = min($remainingAmount, $due);
+
+                /* =====================================================
+                 | 3️⃣ PAYMENT ALLOCATION (LINK PAYMENT → ORDER)
+                 ===================================================== */
+                DB::table('payment_allocations')->insert([
+                    'payment_ledger_id' => $paymentLedgerId,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $payNow,
+                    'created_at'        => now(),
                 ]);
 
-                // 2️⃣ Update order
-                $order->payment_status = ($payNow == $due) ? 'paid' : 'partial';
+                /* =====================================================
+                 | 4️⃣ UPDATE ORDER PAYMENT STATUS
+                 ===================================================== */
+                $order->paid_amount += $payNow;
+                $order->payment_status = ($order->paid_amount >= $orderTotal)
+                    ? 'paid'
+                    : 'partial';
                 $order->save();
 
-                // 3️⃣ Store ledger
-                $lastBalance = DB::table('store_ledgers')
-                    ->where('store_id', $storeId)
-                    ->latest()
-                    ->value('balance_after') ?? 0;
-
+                /* =====================================================
+                 | 5️⃣ STORE LEDGER (RECEIVABLE REDUCTION)
+                 ===================================================== */
                 DB::table('store_ledgers')->insert([
-                    'store_id' => $storeId,
-                    'order_id' => $order->id,
-                    'entry_type' => 'credit',
-                    'amount' => $payNow,
-                    'balance_after' => $lastBalance + $payNow,
+                    'store_id'       => $storeId,
                     'reference_type' => 'payment',
-                    'reference_id' => $order->id,
-                    'created_at' => now()
+                    'reference_id'   => $paymentLedgerId,
+                    'debit'          => 0,
+                    'credit'         => $payNow,
+                    'balance_type'   => 'receivable',
+                    'remarks'        => 'FIFO payment applied to order #' . $order->id,
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
                 ]);
 
-                // 4️⃣ Audit
+                /* =====================================================
+                 | 6️⃣ AUDIT LOG
+                 ===================================================== */
                 DB::table('audit_logs')->insert([
-                    'user_id' => $userId,
-                    'branch' => $order->branch_id,
-                    'action' => 'fifo_payment_applied',
+                    'user_id'    => $userId,
+                    'branch'     => $order->branch,
+                    'action'     => 'fifo_payment_allocated',
                     'table_name' => 'orders',
-                    'record_id' => $order->id,
+                    'record_id'  => $order->id,
                     'new_values' => json_encode([
-                        'paid' => $payNow,
-                        'method' => $method
+                        'allocated_amount'  => $payNow,
+                        'payment_ledger_id' => $paymentLedgerId,
+                        'payment_method'    => $method
                     ]),
-                    'created_at' => now()
+                    'created_at' => now(),
                 ]);
 
-                $amount -= $payNow;
+                Log::info('FIFO allocation done', [
+                    'order_id' => $order->id,
+                    'allocated_amount' => $payNow,
+                ]);
+
+                $remainingAmount -= $payNow;
             }
 
+            /* =====================================================
+             | 7️⃣ COMMIT
+             ===================================================== */
             DB::commit();
+
+            Log::info('FIFO store payment completed', [
+                'payment_ledger_id' => $paymentLedgerId
+            ]);
+
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            Log::error('FIFO store payment failed', [
+                'error' => $e->getMessage(),
+                'store_id' => $storeId
+            ]);
+
             throw $e;
         }
     }

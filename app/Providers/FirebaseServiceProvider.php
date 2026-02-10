@@ -14,8 +14,10 @@ class FirebaseServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton('firebase.firestore', function ($app) {
-            $serviceAccountKey = Helpers::get_business_settings('push_notification_service_file_content')??[];
-            if(count($serviceAccountKey)>0){
+            $serviceAccountKey = Helpers::get_business_settings('push_notification_service_file_content') ?? [];
+            
+            // ✅ FIX: Ensure it's an array before counting
+            if (is_array($serviceAccountKey) && count($serviceAccountKey) > 0) {
                 $serviceAccount = $serviceAccountKey;
                 return (new Factory)
                     ->withServiceAccount($serviceAccount)
@@ -25,8 +27,10 @@ class FirebaseServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton('firebase.messaging', function ($app) {
-            $serviceAccountKey = \App\CentralLogics\Helpers::get_business_settings('push_notification_service_file_content')??[];
-            if(count($serviceAccountKey)>0){
+            $serviceAccountKey = \App\CentralLogics\Helpers::get_business_settings('push_notification_service_file_content') ?? [];
+            
+            // ✅ FIX: Ensure it's an array before counting
+            if (is_array($serviceAccountKey) && count($serviceAccountKey) > 0) {
                 $serviceAccount = $serviceAccountKey;
                 return (new Factory)
                     ->withServiceAccount($serviceAccount)

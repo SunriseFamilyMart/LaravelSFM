@@ -35,8 +35,10 @@ class UpiPaymentController extends Controller
      */
     public function getUpiDetails(Request $request)
     {
-        $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', '7909920500@ptaxis'));
-        $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Golden Brown'));
+       //  $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', 'paytmqr5jjsna@ptys'));
+       // $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Sunrise Family Mart'));
+$upiId = 'paytmqr5jjsna@ptys'; 
+$merchantName = 'Sunrise Family Mart';
 
         return response()->json([
             'success' => true,
@@ -76,10 +78,11 @@ class UpiPaymentController extends Controller
 
             // Generate payment reference
             $paymentRef = 'UPI-DM-' . strtoupper(Str::random(8)) . '-' . time();
-            
-            $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', '7909920500@ptaxis'));
-            $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Golden Brown'));
+         //   $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', 'paytmqr5jjsna@ptys'));
+         //   $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Sunrise Family Mart'));
 
+$upiId = 'paytmqr5jjsna@ptys'; 
+$merchantName = 'Sunrise Family Mart';
             // Create transaction
             $transaction = UpiTransaction::create([
                 'payment_ref' => $paymentRef,
@@ -310,8 +313,10 @@ class UpiPaymentController extends Controller
             // Generate payment reference
             $paymentRef = 'UPI-SP-' . strtoupper(Str::random(8)) . '-' . time();
             
-            $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', '7909920500@ptaxis'));
-            $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Golden Brown'));
+            // $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', 'paytmqr5jjsna@ptys'));
+           // $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Sunrise Family Mart'));
+$upiId = 'paytmqr5jjsna@ptys'; 
+$merchantName = 'Sunrise Family Mart';
 
             // Create transaction with cart items stored in notes
             $transaction = UpiTransaction::create([
@@ -672,9 +677,10 @@ class UpiPaymentController extends Controller
             }
 
             $paymentRef = 'UPI-ST-' . strtoupper(Str::random(8)) . '-' . time();
-            $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', '7909920500@ptaxis'));
-            $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Golden Brown'));
-
+           // $upiId = config('payment.upi_id', env('MERCHANT_UPI_ID', 'paytmqr5jjsna@ptys'));
+          //  $merchantName = config('payment.merchant_name', env('MERCHANT_NAME', 'Sunrise Family Mart'));
+$upiId = 'paytmqr5jjsna@ptys'; 
+$merchantName = 'Sunrise Family Mart';
             $transaction = UpiTransaction::create([
                 'payment_ref' => $paymentRef,
                 'order_id' => null,

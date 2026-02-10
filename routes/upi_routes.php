@@ -88,6 +88,14 @@ Route::prefix('v1')->group(function () {
         // Check payment status
         Route::get('/status/{payment_ref}', [UpiPaymentController::class, 'status']);
     });
+
+     // ================= SALES PERSON (✅ FIXED) =================
+    Route::prefix('sales/upi')->group(function () {
+        Route::post('/initiate', [UpiPaymentController::class, 'initiateSalesPerson']);
+        Route::post('/confirm',  [UpiPaymentController::class, 'confirmSalesPerson']);
+        Route::post('/cancel',   [UpiPaymentController::class, 'cancel']);
+        Route::get('/status/{payment_ref}', [UpiPaymentController::class, 'status']);
+    });
     
     // Admin endpoints (add your admin middleware)
     Route::prefix('admin/upi')->group(function () {
@@ -96,7 +104,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/settle', [UpiPaymentController::class, 'markAsSettled']);
     });
 });
-
 
 /*
 |--------------------------------------------------------------------------

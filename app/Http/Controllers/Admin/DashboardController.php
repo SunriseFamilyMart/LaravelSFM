@@ -256,14 +256,12 @@ class DashboardController extends Controller
                 return $query->whereMonth('created_at', Carbon::now());
             })
             ->count();
-        $returned = $this->order->where(['order_status' => 'returned'])
-            ->when($today, function ($query) {
-                return $query->whereDate('created_at', Carbon::today());
-            })
-            ->when($thisMonth, function ($query) {
-                return $query->whereMonth('created_at', Carbon::now());
-            })
-            ->count();
+       $returned = $this->order
+    ->whereIn('order_status', ['returned', 'partial_delivered'])
+    ->when($today, fn($q) => $q->whereDate('created_at', Carbon::today()))
+    ->when($thisMonth, fn($q) => $q->whereMonth('created_at', Carbon::now()))
+    ->count();
+
         $failed = $this->order->where(['order_status' => 'failed'])
             ->when($today, function ($query) {
                 return $query->whereDate('created_at', Carbon::today());

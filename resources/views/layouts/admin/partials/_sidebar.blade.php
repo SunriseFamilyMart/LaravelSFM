@@ -124,6 +124,18 @@
                                             </span>
                                         </a>
                                     </li>
+                                    <li class="nav-item {{ Request::is('admin/picking*') ? 'active' : '' }}">
+                                        <a class="nav-link" href="{{ route('admin.picking.index') }}"
+                                            title="{{ translate('picking') }}">
+                                            <span class="tio-circle nav-indicator-icon"></span>
+                                            <span class="text-truncate sidebar--badge-container">
+                                                <span>{{ translate('picking') }}</span>
+                                                <span class="badge badge-soft-info badge-pill ml-1">
+                                                    {{ \App\Model\Order::whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging'])->count() }}
+                                                </span>
+                                            </span>
+                                        </a>
+                                    </li>
                                     <li
                                         class="nav-item {{ Request::is('admin/orders/list/processing') ? 'active' : '' }}">
                                         <a class="nav-link " href="{{ route('admin.orders.list', ['processing']) }}"
@@ -172,9 +184,10 @@
                                             <span class="tio-circle nav-indicator-icon"></span>
                                             <span class="text-truncate  sidebar--badge-container">
                                                 <span>{{ translate('returned') }}</span>
-                                                <span class="badge badge-soft-danger badge-pill ml-1">
-                                                    {{ \App\Model\Order::where(['order_status' => 'returned'])->count() }}
-                                                </span>
+                                               <span class="badge badge-soft-danger badge-pill ml-1">
+    {{ \App\Model\Order::whereIn('order_status', ['returned', 'partial_delivered'])->count() }}
+</span>
+
                                             </span>
                                         </a>
                                     </li>

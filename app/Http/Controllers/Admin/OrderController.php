@@ -143,7 +143,7 @@ class OrderController extends Controller
 
     // Count orders by status (keeping old functionality)
     $countData = [];
-    $orderStatuses = ['pending', 'confirmed', 'processing', 'out_for_delivery', 'delivered', 'canceled', 'returned', 'failed'];
+    $orderStatuses = ['pending', 'confirmed', 'picking', 'processing', 'out_for_delivery', 'delivered', 'canceled', 'returned', 'failed'];
 
     foreach ($orderStatuses as $orderStatus) {
         $countData[$orderStatus] = $this->order->notPos()
@@ -458,7 +458,9 @@ public function storeOrder(Request $request)
             'offline_payment',
             'editLogs',
             'editLogs.deliveryMan',
-            'editLogs.orderDetail'
+            'editLogs.orderDetail',
+            'creditNotes',          // ✅ THIS IS THE FIX
+            'creditNotes.items', 
         ])
         ->find($id);
 
