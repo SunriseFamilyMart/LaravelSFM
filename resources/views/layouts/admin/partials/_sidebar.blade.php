@@ -461,6 +461,15 @@
                             </li>
 
                             <li
+                                class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/advanced-reports*') ? 'active' : '' }}">
+                                <a class="nav-link " href="{{ route('admin.report.advanced-reports') }}"
+                                    title="{{ translate('Advanced Reports') }}">
+                                    <span class="tio-chart-bar-4 nav-icon"></span>
+                                    <span class="text-truncate">{{ translate('Advanced Reports') }}</span>
+                                </a>
+                            </li>
+
+                            <li
                                 class="navbar-vertical-aside-has-menu {{ Request::is('admin/report/sale-report') ? 'active' : '' }}">
                                 <a class="nav-link " href="{{ route('admin.report.sale-report') }}"
                                     title="{{ translate('sale') }} {{ translate('report') }}">
