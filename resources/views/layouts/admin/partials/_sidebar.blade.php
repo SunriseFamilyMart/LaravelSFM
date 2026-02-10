@@ -209,6 +209,13 @@
                                 </ul>
                             </li>
 
+                            <li class="nav-item {{ Request::is('admin/picking*') ? 'active' : '' }}">
+                                <a class="nav-link" href="{{ route('admin.picking.index') }}" title="{{ translate('picking') }}">
+                                    <i class="tio-checkmark-square-outlined nav-icon"></i>
+                                    <span class="text-truncate">{{ translate('picking') }}</span>
+                                </a>
+                            </li>
+
                             <li
                                 class="navbar-vertical-aside-has-menu {{ Request::is('admin/delivery-details*') ? 'active' : '' }}">
                                 <a class="js-navbar-vertical-aside-menu-link nav-link nav-link-toggle"
