@@ -143,6 +143,10 @@
                                                 <span class="badge badge-soft-info">{{ translate('confirmed') }}</span>
                                             @elseif($order->order_status == 'picking')
                                                 <span class="badge badge-soft-warning">{{ translate('picking') }}</span>
+                                            @elseif($order->order_status == 'processing')
+                                                <span class="badge badge-soft-primary">{{ translate('processing') }}</span>
+                                            @elseif($order->order_status == 'packaging')
+                                                <span class="badge badge-soft-dark">{{ translate('packaging') }}</span>
                                             @endif
                                         </td>
                                         <td>
