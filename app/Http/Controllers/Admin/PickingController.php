@@ -325,8 +325,8 @@ class PickingController extends Controller
                     $orderDetail->quantity = $pickingItem->picked_qty;
                     $orderDetail->save();
 
-                    // Calculate new line total: (picked_qty × price) - discount
-                    $lineTotal = ($pickingItem->picked_qty * $orderDetail->price) - $newDiscount;
+                    // Calculate new line total: (picked_qty × price) - discount + tax
+                    $lineTotal = ($pickingItem->picked_qty * $orderDetail->price) - $newDiscount + $newTaxAmount;
                     $newOrderAmount += $lineTotal;
                 }
             }
