@@ -48,8 +48,7 @@ class PickingController extends Controller
         $deliveryMen = $this->deliveryMan->all();
 
         $query = $this->order->with(['customer', 'branch', 'details', 'pickingItems'])
-            ->whereIn('order_status', ['confirmed', 'picking'])
-            ->notPos();
+            ->whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging']);
 
         // Branch filter
         if ($branchId && $branchId != 'all') {
