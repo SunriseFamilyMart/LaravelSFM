@@ -533,7 +533,7 @@ class DashboardController extends Controller
             ->count();
 
         // Calculate Profit and Margin
-        $profitData = $this->calculateProfitAndMargin($orderQuery, $purchaseQuery);
+        $profitData = $this->calculateProfitAndMargin($orderQuery);
 
         return [
             'total_sales' => round($totalSales ?? 0, 2),
@@ -548,13 +548,41 @@ class DashboardController extends Controller
     /**
      * Calculate profit and margin
      */
-    private function calculateProfitAndMargin($orderQuery, $purchaseQuery): array
+    private function calculateProfitAndMargin($orderQuery): array
     {
         // Get delivered orders with their details
         $deliveredOrders = (clone $orderQuery)
             ->where('order_status', 'delivered')
             ->with(['details.product'])
             ->get();
+
+        // Collect all unique product IDs from order details
+        $productIds = [];
+        foreach ($deliveredOrders as $order) {
+            foreach ($order->details as $detail) {
+                if ($detail->product_id) {
+                    $productIds[] = $detail->product_id;
+                }
+            }
+        }
+        $productIds = array_unique($productIds);
+
+        // Fetch all latest purchase prices at once to avoid N+1 query problem
+        $purchasePrices = [];
+        if (!empty($productIds)) {
+            $latestPurchases = $this->adminPurchase
+                ->whereIn('product_id', $productIds)
+                ->select('product_id', 'purchase_price', 'created_at')
+                ->get()
+                ->groupBy('product_id')
+                ->map(function ($purchases) {
+                    return $purchases->sortByDesc('created_at')->first();
+                });
+
+            foreach ($latestPurchases as $productId => $purchase) {
+                $purchasePrices[$productId] = $purchase->purchase_price ?? 0;
+            }
+        }
 
         $totalRevenue = 0;
         $totalCost = 0;
@@ -567,18 +595,8 @@ class DashboardController extends Controller
                 // Revenue from this order detail
                 $totalRevenue += $sellingPrice * $quantity;
 
-                // Try to get purchase price from AdminPurchase
-                $purchasePrice = 0;
-                if ($detail->product_id) {
-                    $latestPurchase = $this->adminPurchase
-                        ->where('product_id', $detail->product_id)
-                        ->latest()
-                        ->first();
-                    
-                    if ($latestPurchase && $latestPurchase->purchase_price) {
-                        $purchasePrice = $latestPurchase->purchase_price;
-                    }
-                }
+                // Get purchase price from pre-loaded array
+                $purchasePrice = $purchasePrices[$detail->product_id] ?? 0;
 
                 // Cost for this order detail
                 $totalCost += $purchasePrice * $quantity;
