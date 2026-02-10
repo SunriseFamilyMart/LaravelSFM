@@ -92,7 +92,7 @@ class DashboardController extends Controller
             ->take(6)
             ->get();
 
-        $data = self::orderStatsData();
+        $data = $this->orderStatsData();
 
         $data['customer'] = $this->user->count();
         $data['product'] = $this->product->count();
@@ -110,7 +110,7 @@ class DashboardController extends Controller
         $data['recent_orders'] = $this->order->notPos()->latest()->take(5)->get(['id', 'created_at', 'order_status']);
 
         // Business metrics - keep as separate array for clarity
-        $data['business_metrics'] = self::fetchBusinessMetrics();
+        $data['business_metrics'] = $this->fetchBusinessMetrics();
         
         // Also merge individual metrics for backward compatibility
         $data = array_merge($data, $data['business_metrics']);
