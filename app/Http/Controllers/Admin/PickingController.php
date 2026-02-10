@@ -95,7 +95,7 @@ class PickingController extends Controller
         }
 
         // Search filter
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $key = explode(' ', $request['search']);
             $query->where(function ($q) use ($key) {
                 foreach ($key as $value) {
@@ -292,24 +292,48 @@ class PickingController extends Controller
 
             // Recalculate order amount based on picked quantities
             $newOrderAmount = 0;
+            $newTotalTax = 0;
 
             foreach ($order->pickingItems as $pickingItem) {
                 // Find corresponding order_detail
                 $orderDetail = $order->details->where('id', $pickingItem->order_detail_id)->first();
                 
                 if ($orderDetail) {
+                    // Save original values to picking item for audit trail
+                    $pickingItem->original_price = $orderDetail->price;
+                    $pickingItem->original_tax_amount = $orderDetail->tax_amount;
+                    $pickingItem->original_discount = $orderDetail->discount_on_product;
+                    $pickingItem->save();
+
+                    // Calculate proportions based on picked vs ordered quantity
+                    if ($pickingItem->ordered_qty > 0) {
+                        $proportion = $pickingItem->picked_qty / $pickingItem->ordered_qty;
+                    } else {
+                        $proportion = 0;
+                    }
+
+                    // Recalculate tax proportionally
+                    $newTaxAmount = $orderDetail->tax_amount * $proportion;
+                    $orderDetail->tax_amount = $newTaxAmount;
+                    $newTotalTax += $newTaxAmount;
+
+                    // Recalculate discount proportionally
+                    $newDiscount = $orderDetail->discount_on_product * $proportion;
+                    $orderDetail->discount_on_product = $newDiscount;
+
                     // Update the order_detail quantity to picked_qty
                     $orderDetail->quantity = $pickingItem->picked_qty;
                     $orderDetail->save();
 
-                    // Calculate new line total (picked_qty * price)
-                    $lineTotal = $pickingItem->picked_qty * $orderDetail->price;
+                    // Calculate new line total: (picked_qty × price) - discount
+                    $lineTotal = ($pickingItem->picked_qty * $orderDetail->price) - $newDiscount;
                     $newOrderAmount += $lineTotal;
                 }
             }
 
-            // Update order amount and status
+            // Update order amount, total tax, and status
             $order->order_amount = $newOrderAmount;
+            $order->total_tax_amount = $newTotalTax;
             $order->order_status = 'processing';
             $order->save();
 
