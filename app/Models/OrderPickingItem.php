@@ -24,6 +24,9 @@ class OrderPickingItem extends Model
         'picked_by',
         'picked_at',
         'status',
+        'original_tax_amount',
+        'original_discount',
+        'original_price',
     ];
 
     protected $casts = [
@@ -35,6 +38,9 @@ class OrderPickingItem extends Model
         'missing_qty' => 'integer',
         'picked_by' => 'integer',
         'picked_at' => 'datetime',
+        'original_tax_amount' => 'float',
+        'original_discount' => 'float',
+        'original_price' => 'float',
     ];
 
     public function order()
