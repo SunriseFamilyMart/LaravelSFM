@@ -299,11 +299,18 @@ class PickingController extends Controller
                 $orderDetail = $order->details->where('id', $pickingItem->order_detail_id)->first();
                 
                 if ($orderDetail) {
-                    // Save original values to picking item for audit trail
-                    $pickingItem->original_price = $orderDetail->price;
-                    $pickingItem->original_tax_amount = $orderDetail->tax_amount;
-                    $pickingItem->original_discount = $orderDetail->discount_on_product;
-                    $pickingItem->save();
+                    // Get original values (either from picking item if already saved, or from current order_detail)
+                    $originalPrice = $pickingItem->original_price ?? $orderDetail->price;
+                    $originalTaxAmount = $pickingItem->original_tax_amount ?? $orderDetail->tax_amount;
+                    $originalDiscount = $pickingItem->original_discount ?? $orderDetail->discount_on_product;
+                    
+                    // Save original values to picking item for audit trail (if not already saved)
+                    if (!$pickingItem->original_price) {
+                        $pickingItem->original_price = $originalPrice;
+                        $pickingItem->original_tax_amount = $originalTaxAmount;
+                        $pickingItem->original_discount = $originalDiscount;
+                        $pickingItem->save();
+                    }
 
                     // Calculate proportions based on picked vs ordered quantity
                     if ($pickingItem->ordered_qty > 0) {
@@ -312,13 +319,13 @@ class PickingController extends Controller
                         $proportion = 0;
                     }
 
-                    // Recalculate tax proportionally
-                    $newTaxAmount = $orderDetail->tax_amount * $proportion;
+                    // Recalculate tax proportionally using original tax amount
+                    $newTaxAmount = $originalTaxAmount * $proportion;
                     $orderDetail->tax_amount = $newTaxAmount;
                     $newTotalTax += $newTaxAmount;
 
-                    // Recalculate discount proportionally
-                    $newDiscount = $orderDetail->discount_on_product * $proportion;
+                    // Recalculate discount proportionally using original discount
+                    $newDiscount = $originalDiscount * $proportion;
                     $orderDetail->discount_on_product = $newDiscount;
 
                     // Update the order_detail quantity to picked_qty
@@ -326,7 +333,7 @@ class PickingController extends Controller
                     $orderDetail->save();
 
                     // Calculate new line total: (picked_qty × price) - discount + tax
-                    $lineTotal = ($pickingItem->picked_qty * $orderDetail->price) - $newDiscount + $newTaxAmount;
+                    $lineTotal = ($pickingItem->picked_qty * $originalPrice) - $newDiscount + $newTaxAmount;
                     $newOrderAmount += $lineTotal;
                 }
             }
