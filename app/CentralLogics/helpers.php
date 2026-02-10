@@ -268,6 +268,7 @@ class Helpers
 
     public static function set_symbol($amount)
     {
+        $amount = (float) str_replace(',', '', (string) $amount); // defensive cast
         $decimal_point_settings = Helpers::get_business_settings('decimal_point_settings');
         $position = Helpers::get_business_settings('currency_symbol_position');
         if (!is_null($position) && $position == 'left') {

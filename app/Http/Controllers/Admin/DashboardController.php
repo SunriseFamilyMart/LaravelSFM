@@ -194,7 +194,7 @@ class DashboardController extends Controller
     public function orderStats(Request $request): \Illuminate\Http\JsonResponse
     {
         session()->put('statistics_type', $request['statistics_type']);
-        $data = self::orderStatsData();
+        $data = $this->orderStatsData();
 
         return response()->json([
             'view' => view('admin-views.partials._dashboard-order-stats', compact('data'))->render()
