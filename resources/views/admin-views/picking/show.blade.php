@@ -59,7 +59,7 @@
                                         @php
                                             $product = $detail->product;
                                             $productName = $product ? $product->name : 'Product #' . $detail->product_id;
-                                            $unitWeight = $product && isset($product->weight) ? $product->weight : 0;
+                                            $unitWeight = $product->weight ?? 0;
                                             $itemTotalWeight = $unitWeight * $detail->quantity;
                                             $totalWeight += $itemTotalWeight;
                                             $totalItems += $detail->quantity;

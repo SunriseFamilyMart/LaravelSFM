@@ -179,7 +179,7 @@
                             $productName = $product ? $product->name : 'Product #' . $detail->product_id;
                             $unit = $detail->unit ?? 'pcs';
                             $quantity = $detail->quantity;
-                            $unitWeight = $product && isset($product->weight) ? $product->weight : 0;
+                            $unitWeight = $product->weight ?? 0;
                             $totalWeight = $unitWeight * $quantity;
                             $orderTotalWeight += $totalWeight;
                             $orderTotalItems += $quantity;
