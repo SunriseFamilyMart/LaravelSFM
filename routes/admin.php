@@ -81,6 +81,7 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
         Route::get('/get-restaurant-data', [SystemController::class, 'restaurantData'])->name('get-restaurant-data');
         Route::get('dashboard/order-statistics', [DashboardController::class, 'getOrderStatistics'])->name('dashboard.order-statistics');
         Route::get('dashboard/earning-statistics', [DashboardController::class, 'getEarningStatistics'])->name('dashboard.earning-statistics');
+        Route::get('dashboard/business-metrics', [DashboardController::class, 'getBusinessMetrics'])->name('dashboard.business-metrics');
            Route::get('/table-indexes', [DashboardController::class, 'showAllTableIndexes'])->name('admin.tableIndexes');
 
         Route::group(['prefix' => 'custom-role', 'as' => 'custom-role.', 'middleware' => ['module:user_management']], function () {
