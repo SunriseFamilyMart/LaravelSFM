@@ -1,205 +1,285 @@
 @extends('layouts.admin.app')
 
-@section('title', translate('Picking Order Details'))
+@section('title', translate('Pick Order Items'))
+
+@push('css_or_js')
+    <style>
+        .product-image {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        
+        .status-badge {
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+
+        .picking-table td,
+        .picking-table th {
+            vertical-align: middle;
+        }
+
+        .missing-fields {
+            display: none;
+        }
+    </style>
+@endpush
 
 @section('content')
     <div class="content container-fluid">
-        <div class="page-header d-flex justify-content-between">
-            <h1 class="page-header-title">
+        <div class="page-header">
+            <h1 class="mb-0 page-header-title">
                 <span class="page-header-icon">
-                    <img src="{{ asset('public/assets/admin/img/order.png') }}" class="w--20" alt="">
+                    <img src="{{ asset('public/assets/admin/img/all_orders.png') }}" class="w--20" alt="">
                 </span>
-                <span>
-                    {{ translate('Picking Order Details') }}
+                <span class="">
+                    {{ translate('Pick Order Items') }} - {{ translate('Order') }} #{{ $order->id }}
                 </span>
             </h1>
-            <a href="{{ route('admin.picking.index') }}" class="btn btn--primary">
-                <i class="tio-back-ui"></i> {{ translate('Back to Pick List') }}
-            </a>
         </div>
 
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card mb-3 mb-lg-5">
-                    <div class="card-header">
-                        <h1 class="page-header-title">
-                            <span class="mr-3">{{ translate('Order ID') }} #{{ $order['id'] }}</span>
-                            <span class="badge badge-soft-{{ $order['order_status'] == 'pending' ? 'warning' : 'info' }} py-2 px-3">
-                                {{ translate($order['order_status']) }}
-                            </span>
-                        </h1>
-                        <span>
-                            <i class="tio-date-range"></i>
-                            {{ date('d M Y H:i', strtotime($order['created_at'])) }}
-                        </span>
+        <!-- Order Info Card -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <h6>{{ translate('Order ID') }}</h6>
+                        <p>{{ $order->id }}</p>
                     </div>
-
-                    <!-- Order Items -->
-                    <div class="card-body">
-                        <h5 class="card-title">{{ translate('Order Items') }}</h5>
-                        <div class="table-responsive">
-                            <table class="table table-borderless table-thead-bordered">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>{{ translate('Product') }}</th>
-                                        <th>{{ translate('Unit') }}</th>
-                                        <th class="text-right">{{ translate('Qty') }}</th>
-                                        <th class="text-right">{{ translate('Unit Weight') }} (kg)</th>
-                                        <th class="text-right">{{ translate('Total Weight') }} (kg)</th>
-                                        <th class="text-right">{{ translate('Price') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @php
-                                        $totalWeight = 0;
-                                        $totalItems = 0;
-                                    @endphp
-                                    @foreach ($order->details as $key => $detail)
-                                        @php
-                                            $product = $detail->product;
-                                            $productName = $product ? $product->name : 'Product #' . $detail->product_id;
-                                            $unitWeight = $product->weight ?? 0;
-                                            $itemTotalWeight = $unitWeight * $detail->quantity;
-                                            $totalWeight += $itemTotalWeight;
-                                            $totalItems += $detail->quantity;
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $key + 1 }}</td>
-                                            <td>
-                                                <div class="media">
-                                                    @if ($product && $product->image)
-                                                        @php
-                                                            $images = json_decode($product->image, true);
-                                                        @endphp
-                                                        @if ($images && is_array($images) && count($images) > 0)
-                                                            <img class="avatar avatar-sm mr-3"
-                                                                src="{{ asset('storage/app/public/product/' . $images[0]) }}"
-                                                                onerror="this.src='{{ asset('public/assets/admin/img/160x160/2.png') }}'"
-                                                                alt="{{ $productName }}">
-                                                        @endif
-                                                    @endif
-                                                    <div class="media-body">
-                                                        <h5 class="text-hover-primary mb-0">{{ $productName }}</h5>
-                                                        @if ($detail->variant)
-                                                            <small>{{ translate('Variant') }}: {{ $detail->variant }}</small>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>{{ $detail->unit ?? 'pcs' }}</td>
-                                            <td class="text-right">{{ $detail->quantity }}</td>
-                                            <td class="text-right">{{ number_format($unitWeight, 2) }}</td>
-                                            <td class="text-right">{{ number_format($itemTotalWeight, 2) }}</td>
-                                            <td class="text-right">{{ \App\CentralLogics\Helpers::set_symbol($detail->price) }}</td>
-                                        </tr>
-                                    @endforeach
-                                    <tr>
-                                        <td colspan="3" class="text-right"><strong>{{ translate('Totals') }}:</strong></td>
-                                        <td class="text-right"><strong>{{ $totalItems }}</strong></td>
-                                        <td></td>
-                                        <td class="text-right"><strong>{{ number_format($totalWeight, 2) }} kg</strong></td>
-                                        <td></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="col-md-3">
+                        <h6>{{ translate('Customer') }}</h6>
+                        <p>
+                            @if ($order->is_guest == 0 && $order->customer)
+                                {{ $order->customer->f_name }} {{ $order->customer->l_name }}
+                            @else
+                                {{ translate('Guest Customer') }}
+                            @endif
+                        </p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>{{ translate('Branch') }}</h6>
+                        <p>{{ $order->branch ? $order->branch->name : translate('N/A') }}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>{{ translate('Order Date') }}</h6>
+                        <p>{{ $order->created_at->format('d M Y, h:i A') }}</p>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="col-lg-4">
-                <!-- Store Information -->
-                @if ($order->store)
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h5 class="card-title">{{ translate('Store Information') }}</h5>
-                        </div>
-                        <div class="card-body">
-                            <h6>{{ $order->store->store_name }}</h6>
-                            <div class="mt-2">
-                                <strong>{{ translate('Route') }}:</strong> {{ $order->store->route_name ?? translate('N/A') }}<br>
-                                <strong>{{ translate('Address') }}:</strong> {{ $order->store->address ?? translate('N/A') }}<br>
-                                <strong>{{ translate('Phone') }}:</strong> {{ $order->store->phone_number ?? translate('N/A') }}<br>
-                                @if ($order->store->gst_number)
-                                    <strong>{{ translate('GST Number') }}:</strong> {{ $order->store->gst_number }}<br>
-                                @endif
-                            </div>
-                        </div>
+        @php
+            $allPicked = $order->pickingItems->isNotEmpty() && 
+                         $order->pickingItems->where('status', 'pending')->count() == 0;
+        @endphp
+
+        <!-- Picking Items Card -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>{{ translate('Items to Pick') }}</h5>
+            </div>
+            <div class="card-body">
+                @if ($allPicked)
+                    <div class="alert alert-success">
+                        {{ translate('Picking completed for this order!') }}
                     </div>
                 @endif
 
-                <!-- Delivery Information -->
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h5 class="card-title">{{ translate('Delivery Information') }}</h5>
+                <form method="POST" action="{{ route('admin.picking.complete', ['order_id' => $order->id]) }}" id="completePickingForm">
+                    @csrf
+                    <div class="table-responsive">
+                        <table class="table table-hover table-borderless picking-table">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>{{ translate('Image') }}</th>
+                                    <th>{{ translate('Product Name') }}</th>
+                                    <th>{{ translate('Ordered Qty') }}</th>
+                                    <th>{{ translate('Mark as Missing') }}</th>
+                                    @if ($allPicked)
+                                        <th>{{ translate('Status') }}</th>
+                                    @endif
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($order->pickingItems as $item)
+                                    <tr data-picking-item-id="{{ $item->id }}">
+                                        <td>
+                                            @if ($item->product && $item->product->image)
+                                                <img src="{{ asset('storage/app/public/product/' . json_decode($item->product->image)[0]) }}" 
+                                                     alt="{{ $item->product->name }}" 
+                                                     class="product-image"
+                                                     onerror="this.src='{{ asset('public/assets/admin/img/160x160/img2.jpg') }}'">
+                                            @else
+                                                <img src="{{ asset('public/assets/admin/img/160x160/img2.jpg') }}" 
+                                                     alt="Product" 
+                                                     class="product-image">
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($item->product)
+                                                {{ $item->product->name }}
+                                            @else
+                                                {{ translate('Product not found') }}
+                                            @endif
+                                        </td>
+                                        <td class="ordered-qty">{{ $item->ordered_qty }}</td>
+                                        <td>
+                                            @if ($allPicked)
+                                                @if ($item->missing_qty > 0)
+                                                    <span class="badge badge-warning">{{ translate('Missing') }}: {{ $item->missing_qty }}</span>
+                                                    @if ($item->missing_reason)
+                                                        <br><small class="text-muted">{{ translate(ucfirst(str_replace('_', ' ', $item->missing_reason))) }}</small>
+                                                    @endif
+                                                @else
+                                                    <span class="text-success">{{ translate('Fully Picked') }}</span>
+                                                @endif
+                                            @else
+                                                <div>
+                                                    <input type="checkbox" 
+                                                           class="mark-missing-checkbox" 
+                                                           name="missing_items[]" 
+                                                           value="{{ $item->id }}"
+                                                           id="missing_{{ $item->id }}">
+                                                    <label for="missing_{{ $item->id }}">{{ translate('Missing') }}</label>
+                                                    
+                                                    <div class="missing-fields mt-2" id="missing_fields_{{ $item->id }}">
+                                                        <div class="form-group">
+                                                            <label>{{ translate('Missing Qty') }}</label>
+                                                            <input type="number" 
+                                                                   class="form-control missing-qty-input" 
+                                                                   name="missing_qty[{{ $item->id }}]"
+                                                                   min="1" 
+                                                                   max="{{ $item->ordered_qty }}" 
+                                                                   value="1"
+                                                                   required
+                                                                   style="width: 120px;">
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label>{{ translate('Missing Reason') }}</label>
+                                                            <select class="form-control missing-reason-select" 
+                                                                    name="missing_reason[{{ $item->id }}]"
+                                                                    style="width: 200px;"
+                                                                    required>
+                                                                <option value="">{{ translate('Select Reason') }}</option>
+                                                                <option value="out_of_stock">{{ translate('Out of Stock') }}</option>
+                                                                <option value="damaged">{{ translate('Damaged') }}</option>
+                                                                <option value="expired">{{ translate('Expired') }}</option>
+                                                                <option value="not_found">{{ translate('Not Found') }}</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </td>
+                                        @if ($allPicked)
+                                            <td>
+                                                @if ($item->status == 'pending')
+                                                    <span class="badge badge-warning status-badge">{{ translate('Pending') }}</span>
+                                                @elseif ($item->status == 'picked')
+                                                    <span class="badge badge-success status-badge">{{ translate('Picked') }}</span>
+                                                @elseif ($item->status == 'partial')
+                                                    <span class="badge badge-info status-badge">{{ translate('Partial') }}</span>
+                                                @elseif ($item->status == 'missing')
+                                                    <span class="badge badge-danger status-badge">{{ translate('Missing') }}</span>
+                                                @endif
+                                            </td>
+                                        @endif
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="card-body">
-                        <div class="media">
-                            <div class="media-body">
-                                @if ($order->branch)
-                                    <strong>{{ translate('Branch') }}:</strong> {{ $order->branch->name }}<br>
-                                @endif
-                                @if ($order->delivery_date)
-                                    <strong>{{ translate('Delivery Date') }}:</strong> {{ $order->delivery_date }}<br>
-                                @endif
-                                @if ($order->time_slot)
-                                    <strong>{{ translate('Time Slot') }}:</strong> 
-                                    {{ $order->time_slot->start_time ?? '' }} - {{ $order->time_slot->end_time ?? '' }}<br>
-                                @endif
-                                @if ($order->delivery_man)
-                                    <strong>{{ translate('Delivery Man') }}:</strong> 
-                                    {{ $order->delivery_man->f_name }} {{ $order->delivery_man->l_name }}<br>
-                                @endif
-                                @if ($order->order_note)
-                                    <hr>
-                                    <strong>{{ translate('Delivery Instructions') }}:</strong><br>
-                                    <p class="text-muted">{{ $order->order_note }}</p>
-                                @endif
-                            </div>
+
+                    @if (!$allPicked)
+                        <div class="mt-4 text-right">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                {{ translate('Complete Picking') }}
+                            </button>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Order Summary -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title">{{ translate('Order Summary') }}</h5>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row">
-                            <dt class="col-6">{{ translate('Subtotal') }}:</dt>
-                            <dd class="col-6 text-right">{{ \App\CentralLogics\Helpers::set_symbol($order->order_amount) }}</dd>
-
-                            @if ($order->total_tax_amount > 0)
-                                <dt class="col-6">{{ translate('Tax') }}:</dt>
-                                <dd class="col-6 text-right">{{ \App\CentralLogics\Helpers::set_symbol($order->total_tax_amount) }}</dd>
-                            @endif
-
-                            @if ($order->delivery_charge > 0)
-                                <dt class="col-6">{{ translate('Delivery Fee') }}:</dt>
-                                <dd class="col-6 text-right">{{ \App\CentralLogics\Helpers::set_symbol($order->delivery_charge) }}</dd>
-                            @endif
-
-                            @if (isset($order->weight_charge_amount) && $order->weight_charge_amount > 0)
-                                <dt class="col-6">{{ translate('Weight Charge') }}:</dt>
-                                <dd class="col-6 text-right">{{ \App\CentralLogics\Helpers::set_symbol($order->weight_charge_amount) }}</dd>
-                            @endif
-
-                            <dt class="col-6"><strong>{{ translate('Total') }}:</strong></dt>
-                            <dd class="col-6 text-right">
-                                <strong>{{ \App\CentralLogics\Helpers::set_symbol($order->order_amount + $order->total_tax_amount + ($order->delivery_charge ?? 0) + ($order->weight_charge_amount ?? 0)) }}</strong>
-                            </dd>
-                        </dl>
-
-                        <hr>
-                        <div class="text-center">
-                            <strong>{{ translate('Payment Method') }}:</strong><br>
-                            <span class="badge badge-soft-dark">{{ ucfirst(str_replace('_', ' ', $order->payment_method)) }}</span>
-                        </div>
-                    </div>
-                </div>
+                    @endif
+                </form>
             </div>
         </div>
+
+        <!-- Delivery Man Assignment Card -->
+        @if ($order->order_status == 'processing' || $allPicked)
+            <div class="card">
+                <div class="card-header">
+                    <h5>{{ translate('Assign Delivery Man') }}</h5>
+                </div>
+                <div class="card-body">
+                    @if ($order->delivery_man_id)
+                        <div class="alert alert-info">
+                            {{ translate('Delivery man already assigned') }}: 
+                            @php
+                                $assignedDM = $deliveryMen->firstWhere('id', $order->delivery_man_id);
+                            @endphp
+                            @if ($assignedDM)
+                                {{ $assignedDM->f_name }} {{ $assignedDM->l_name }}
+                            @endif
+                        </div>
+                    @endif
+                    
+                    <form method="POST" action="{{ route('admin.picking.bulk-assign') }}">
+                        @csrf
+                        <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>{{ translate('Select Delivery Man') }}</label>
+                                    <select class="custom-select" name="delivery_man_id" required>
+                                        <option value="">{{ translate('Select Delivery Man') }}</option>
+                                        @foreach ($deliveryMen as $dm)
+                                            <option value="{{ $dm->id }}" {{ $order->delivery_man_id == $dm->id ? 'selected' : '' }}>
+                                                {{ $dm->f_name }} {{ $dm->l_name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="d-block">&nbsp;</label>
+                                <button type="submit" class="btn btn-primary">
+                                    {{ translate('Assign Delivery Man') }}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
     </div>
 @endsection
+
+@push('script_2')
+    <script>
+        $(document).ready(function() {
+            // Show/hide missing fields when checkbox is toggled
+            $('.mark-missing-checkbox').on('change', function() {
+                const itemId = $(this).val();
+                const fieldsDiv = $('#missing_fields_' + itemId);
+                const missingQtyInput = fieldsDiv.find('.missing-qty-input');
+                const missingReasonSelect = fieldsDiv.find('.missing-reason-select');
+                
+                if ($(this).is(':checked')) {
+                    fieldsDiv.show();
+                    missingQtyInput.prop('required', true);
+                    missingReasonSelect.prop('required', true);
+                } else {
+                    fieldsDiv.hide();
+                    missingQtyInput.prop('required', false);
+                    missingReasonSelect.prop('required', false);
+                }
+            });
+
+            // Complete picking form submit confirmation
+            $('#completePickingForm').on('submit', function(e) {
+                if (!confirm('{{ translate("Are you sure you want to complete picking? This will update the order amount based on picked quantities.") }}')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
+@endpush

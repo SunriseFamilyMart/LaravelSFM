@@ -18,6 +18,8 @@ use App\Model\OrderDetail;
 use App\Model\Product;
 use Illuminate\Support\Facades\Cache;
 use App\Model\DeliveryMan;
+use Illuminate\Support\Facades\Log;
+
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 
@@ -685,141 +687,251 @@ return response()->json([
         ], 200);
     }
 
+// App PlaceOrder :Pavan
 
+  public function orders(Request $request)
+{
+    Log::info('Sales order request received', ['payload' => $request->all()]);
 
-    public function orders(Request $request)
-    {
-        // 🔐 Authenticate Sales Person by token
-        $token = $request->header('Authorization');
-        $salesPerson = SalesPerson::where('auth_token', $token)->first();
+    /* ================= AUTH ================= */
+    $token = $request->header('Authorization');
+    $salesPerson = SalesPerson::where('auth_token', $token)->first();
 
-        if (!$salesPerson) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized. Invalid Sales Person token.'
-            ], 401);
-        }
+    if (!$salesPerson) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized. Invalid Sales Person token.'
+        ], 401);
+    }
 
-        // ✅ Validate input using Validator
-        $validator = Validator::make($request->all(), [
-            'store_id' => 'required|exists:stores,id',
-            'order_details' => 'required|array',
-            'order_details.*.product_id' => 'required|exists:products,id',
-            'order_details.*.quantity' => 'required|integer|min:1',
+    /* ================= VALIDATION ================= */
+    $validator = Validator::make($request->all(), [
+        'store_id' => 'required|exists:stores,id',
+        'order_details' => 'required|array|min:1',
+        'order_details.*.product_id' => 'required|exists:products,id',
+        'order_details.*.quantity' => 'required|integer|min:1',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => $validator->errors()->first()
+        ], 422);
+    }
+
+    DB::beginTransaction();
+
+    try {
+        /* ================= STORE → BRANCH RESOLUTION ================= */
+        $store  = Store::lockForUpdate()->findOrFail($request->store_id);
+        $branch = $store->branch; // STRING
+
+        Log::info('Branch resolved from store', [
+            'store_id' => $store->id,
+            'branch' => $branch
         ]);
 
-        if ($validator->fails()) {
-            if ($validator->errors()->has('store_id')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid Store ID provided.'
-                ], 422);
-            }
-
-            if ($validator->errors()->has('order_details.*.product_id')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'One or more Product IDs are invalid.'
-                ], 422);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => $validator->errors()->first()
-            ], 422);
-        }
-
-        // ✅ Create Order (linked to store & sales person)
+        /* ================= ORDER CREATE ================= */
         $order = Order::create([
-            'user_id' => null, // Not a user app order
+            'user_id' => null,
             'is_guest' => 0,
-            'order_amount' => 0, // will calculate later
-            'coupon_discount_amount' => 0,
+            'order_amount' => 0,
+            'paid_amount' => 0,
             'payment_status' => 'unpaid',
             'order_status' => 'pending',
-            'total_tax_amount' => 0, // will calculate later
             'payment_method' => 'cash_on_delivery',
+            'order_type' => 'sales_person',
+            'branch' => $branch,
+            'date' => now()->toDateString(),
+            'delivery_date' => now()->toDateString(),
+            'sales_person_id' => $salesPerson->id,
+            'store_id' => $store->id,
             'checked' => 1,
             'delivery_charge' => 0,
-            'order_type' => 'sales_person',
-            'branch_id' => 1,
-            'date' => Carbon::now()->toDateString(),
-            'delivery_date' => Carbon::now()->toDateString(),
             'extra_discount' => 0,
-            'sales_person_id' => $salesPerson->id,
-            'store_id' => $request->store_id, // ✅ Add store ID
+        ]);
+
+        Log::info('Sales order created', ['order_id' => $order->id]);
+
+        /* ================= AUDIT LOG (ORDER) ================= */
+        DB::table('audit_logs')->insert([
+            'user_id' => $salesPerson->id,
+            'branch' => $branch,
+            'action' => 'sales_order_created',
+            'table_name' => 'orders',
+            'record_id' => $order->id,
+            'new_values' => json_encode($order->toArray()),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
         ]);
 
         $subTotal = 0;
         $totalTax = 0;
 
-        // ✅ Add Order Details
+        /* ================= ORDER DETAILS + FIFO INVENTORY ================= */
         foreach ($request->order_details as $detail) {
-            $product = Product::find($detail['product_id']);
-            if (!$product) {
-                continue;
+
+            $product = Product::lockForUpdate()->findOrFail($detail['product_id']);
+            $qty = (int) $detail['quantity'];
+
+            /* ---- FIFO STOCK CHECK ---- */
+            $availableStock = DB::table('inventory_transactions')
+                ->where('product_id', $product->id)
+                ->where('branch', $branch)
+                ->where('remaining_qty', '>', 0)
+                ->lockForUpdate()
+                ->sum('remaining_qty');
+
+            if ($availableStock < $qty) {
+                Log::error('Insufficient stock', [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'branch' => $branch,
+                    'requested_qty' => $qty,
+                    'available_qty' => $availableStock,
+                ]);
+
+                throw new \Exception("Insufficient stock for {$product->name}");
             }
 
-            $quantity = $detail['quantity'] ?? 1;
-
-            // Discount
-            if ($product->discount_type === 'percent') {
-                $discount = ($product->price * $product->discount / 100);
-            } else {
-                $discount = $product->discount;
-            }
+            /* ---- DISCOUNT ---- */
+            $discount = ($product->discount_type === 'percent')
+                ? ($product->price * $product->discount / 100)
+                : ($product->discount ?? 0);
 
             $priceAfterDiscount = $product->price - $discount;
 
-            // Tax
-            if ($product->tax_type === 'percent') {
-                $taxAmount = ($priceAfterDiscount * $product->tax / 100);
-            } else {
-                $taxAmount = $product->tax;
-            }
+            /* ---- TAX ---- */
+            $taxAmount = ($product->tax_type === 'percent')
+                ? ($priceAfterDiscount * $product->tax / 100)
+                : ($product->tax ?? 0);
 
-            // Running totals
-            $subTotal += ($priceAfterDiscount * $quantity);
-            $totalTax += ($taxAmount * $quantity);
+            $lineTotal = $priceAfterDiscount * $qty;
+            $subTotal += $lineTotal;
+            $totalTax += ($taxAmount * $qty);
 
-            // Prepare product details JSON
-            $productDetails = [
-                'id' => $product->id,
-                'name' => $product->name,
-                'description' => $product->description,
-                'image' => json_decode($product->image, true),
-                'attributes' => json_decode($product->attributes, true),
-                'category_ids' => json_decode($product->category_ids, true),
-                'choice_options' => json_decode($product->choice_options, true),
-            ];
-
-            OrderDetail::create([
+            /* ---- ORDER DETAIL ---- */
+            $orderDetail = OrderDetail::create([
                 'order_id' => $order->id,
                 'product_id' => $product->id,
                 'price' => $product->price,
-                'quantity' => $quantity,
-                'discount_on_product' => $product->discount ?? 0,
+                'quantity' => $qty,
+                'discount_on_product' => $discount,
                 'discount_type' => $product->discount_type ?? 'amount',
                 'tax_amount' => $taxAmount,
-                'product_details' => $productDetails, // <-- no json_encode
+              //  'product_details' => json_encode($product),
+                'product_details' => [
+    'id' => $product->id,
+    'name' => $product->name,
+    'image' => json_decode($product->image, true),
+    'unit' => $product->unit,
+    'price' => $product->price,
+    'tax' => $product->tax,
+    'tax_type' => $product->tax_type,
+],
+
                 'unit' => $product->unit ?? 'pc',
                 'vat_status' => $product->tax_type ?? 'excluded',
                 'variation' => $product->variations ?? '[]',
             ]);
+
+            /* ---- FIFO INVENTORY OUT ---- */
+            $remaining = $qty;
+
+            $batches = DB::table('inventory_transactions')
+                ->where('product_id', $product->id)
+                ->where('branch', $branch)
+                ->where('remaining_qty', '>', 0)
+                ->orderBy('created_at')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($batches as $batch) {
+                if ($remaining <= 0) break;
+
+                $take = min($remaining, $batch->remaining_qty);
+
+                DB::table('inventory_transactions')->insert([
+                    'product_id' => $product->id,
+                    'branch' => $branch,
+                    'type' => 'OUT',
+                    'quantity' => $take,
+                    'unit_price' => $batch->unit_price,
+                    'total_value' => $take * $batch->unit_price,
+                    'remaining_qty' => 0,
+                    'reference_type' => 'sales_order',
+                    'reference_id' => $order->id,
+                    'order_id' => $order->id,
+                    'batch_id' => $batch->batch_id,
+                    'created_at' => now(),
+                ]);
+
+                DB::table('inventory_transactions')
+                    ->where('id', $batch->id)
+                    ->update([
+                        'remaining_qty' => $batch->remaining_qty - $take
+                    ]);
+
+                $remaining -= $take;
+            }
         }
 
-        // ✅ Update totals in order
+        /* ================= UPDATE ORDER TOTAL ================= */
         $order->update([
             'order_amount' => $subTotal,
             'total_tax_amount' => $totalTax,
         ]);
+
+        /* ================= GST LEDGER (OUTPUT) ================= */
+        if ($totalTax > 0) {
+            DB::table('gst_ledgers')->insert([
+                'branch' => $branch,
+                'type' => 'OUTPUT',
+                'taxable_amount' => $subTotal,
+                'gst_amount' => $totalTax,
+                'reference_type' => 'sales_order',
+                'reference_id' => $order->id,
+                'created_at' => now(),
+            ]);
+        }
+
+        /* ================= STORE LEDGER (RECEIVABLE) ================= */
+        DB::table('store_ledgers')->insert([
+            'store_id' => $store->id,
+            'reference_type' => 'order',
+            'reference_id' => $order->id,
+            'debit' => $subTotal + $totalTax,
+            'credit' => 0,
+            'balance_type' => 'receivable',
+            'remarks' => 'Sales order created',
+            'created_at' => now(),
+        ]);
+
+        DB::commit();
+
+        Log::info('Sales order completed', ['order_id' => $order->id]);
 
         return response()->json([
             'success' => true,
             'message' => 'Order placed successfully',
             'order' => $order->load('salesPerson', 'details')
         ]);
+
+    } catch (\Throwable $e) {
+        DB::rollBack();
+
+        Log::error('Sales order failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
 
 
 

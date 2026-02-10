@@ -1,14 +1,11 @@
 @extends('layouts.admin.app')
 
-@section('title', translate('Pick List'))
+@section('title', translate('Picking Orders'))
 
 @push('css_or_js')
     <style>
         table {
             width: 100%;
-        }
-        .min-h-45px {
-            min-height: 45px;
         }
     </style>
 @endpush
@@ -20,8 +17,8 @@
                 <span class="page-header-icon">
                     <img src="{{ asset('public/assets/admin/img/all_orders.png') }}" class="w--20" alt="">
                 </span>
-                <span>
-                    {{ translate('Pick List') }}
+                <span class="">
+                    {{ translate('Picking Orders') }}
                     <span class="badge badge-pill badge-soft-secondary ml-2">{{ $orders->total() }}</span>
                 </span>
             </h1>
@@ -29,152 +26,185 @@
 
         <div class="card">
             <div class="card-header shadow flex-wrap p-20px border-0">
-                <h5 class="form-bold w-100 mb-3">{{ translate('Filter Pick List') }}</h5>
+                <h5 class="form-bold w-100 mb-3">{{ translate('Filter Orders') }}</h5>
                 <form class="w-100" method="GET" action="{{ route('admin.picking.index') }}">
                     <div class="row g-3 g-sm-4 g-md-3 g-lg-4">
 
+                        <!-- From Date Filter -->
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="input-label">{{ translate('From Date') }}</label>
+                            <input type="date" class="form-control" name="from" value="{{ $from ?? '' }}">
+                        </div>
+
+                        <!-- To Date Filter -->
+                        <div class="col-sm-6 col-md-4 col-lg-3">
+                            <label class="input-label">{{ translate('To Date') }}</label>
+                            <input type="date" class="form-control" name="to" value="{{ $to ?? '' }}">
+                        </div>
+
                         <!-- Branch Filter -->
-                        <div class="col-sm-6 col-md-4 col-lg-2">
+                        <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="input-label">{{ translate('Branch') }}</label>
                             <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="branch_id">
-                                <option value="all" {{ $branchId == 'all' ? 'selected' : '' }}>{{ translate('All Branches') }}</option>
+                                <option disabled>--- {{ translate('select') }} {{ translate('branch') }} ---</option>
+                                <option value="all" {{ ($branchId ?? '') == 'all' ? 'selected' : '' }}>{{ translate('all') }} {{ translate('branch') }}</option>
                                 @foreach ($branches as $branch)
-                                    <option value="{{ $branch['id'] }}" {{ $branchId == $branch['id'] ? 'selected' : '' }}>
+                                    <option value="{{ $branch['id'] }}" {{ ($branchId ?? '') == $branch['id'] ? 'selected' : '' }}>
                                         {{ $branch['name'] }}
                                     </option>
                                 @endforeach
                             </select>
                         </div>
 
-                        <!-- Route Filter -->
-                        <div class="col-sm-6 col-md-4 col-lg-2">
-                            <label class="input-label">{{ translate('Route') }}</label>
-                            <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="route">
-                                <option value="all" {{ $route == 'all' ? 'selected' : '' }}>{{ translate('All Routes') }}</option>
-                                @foreach ($routes as $routeName)
-                                    <option value="{{ $routeName }}" {{ $route == $routeName ? 'selected' : '' }}>
-                                        {{ $routeName }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <!-- Date Range -->
-                        <div class="col-sm-6 col-md-4 col-lg-2">
-                            <label class="input-label" for="start_date">{{ translate('Start Date') }}</label>
-                            <input type="text" id="start_date" name="start_date" value="{{ $startDate ?? '' }}"
-                                class="js-flatpickr form-control flatpickr-custom min-h-45px" placeholder="yy-mm-dd"
-                                data-hs-flatpickr-options='{ "dateFormat": "Y-m-d"}'>
-                        </div>
-                        <div class="col-sm-6 col-md-4 col-lg-2">
-                            <label class="input-label" for="end_date">{{ translate('End Date') }}</label>
-                            <input type="text" id="end_date" name="end_date" value="{{ $endDate ?? '' }}"
-                                class="js-flatpickr form-control flatpickr-custom min-h-45px" placeholder="yy-mm-dd"
-                                data-hs-flatpickr-options='{ "dateFormat": "Y-m-d"}'>
-                        </div>
-
-                        <!-- Time Range (Optional) -->
-                        <div class="col-sm-6 col-md-4 col-lg-2">
-                            <label class="input-label" for="start_time">{{ translate('Start Time') }}</label>
-                            <input type="time" id="start_time" name="start_time" value="{{ $startTime ?? '' }}"
-                                class="form-control min-h-45px">
-                        </div>
-                        <div class="col-sm-6 col-md-4 col-lg-2">
-                            <label class="input-label" for="end_time">{{ translate('End Time') }}</label>
-                            <input type="time" id="end_time" name="end_time" value="{{ $endTime ?? '' }}"
-                                class="form-control min-h-45px">
-                        </div>
-
                         <!-- Buttons -->
-                        <div class="col-12">
-                            <div class="d-flex gap-3">
-                                <a href="{{ route('admin.picking.index') }}" class="btn btn--reset min-h-45px">{{ translate('Clear') }}</a>
-                                <button type="submit" class="btn btn--primary min-h-45px">{{ translate('Show Data') }}</button>
-                            </div>
+                        <div class="col-sm-6 col-md-12 col-lg-3 __btn-row align-self-end">
+                            <a href="{{ route('admin.picking.index') }}" class="btn w-100 btn--reset min-h-45px">{{ translate('clear') }}</a>
+                            <button type="submit" class="btn w-100 btn--primary min-h-45px">{{ translate('show data') }}</button>
                         </div>
+
                     </div>
                 </form>
             </div>
 
-            <!-- PDF Download Button -->
-            <div class="card-body pt-0">
-                <div class="d-flex justify-content-end mb-3">
-                    <form method="GET" action="{{ route('admin.picking.export-pdf') }}">
-                        <input type="hidden" name="branch_id" value="{{ $branchId }}">
-                        <input type="hidden" name="route" value="{{ $route }}">
-                        <input type="hidden" name="start_date" value="{{ $startDate ?? '' }}">
-                        <input type="hidden" name="end_date" value="{{ $endDate ?? '' }}">
-                        <input type="hidden" name="start_time" value="{{ $startTime ?? '' }}">
-                        <input type="hidden" name="end_time" value="{{ $endTime ?? '' }}">
-                        <button type="submit" class="btn btn-success">
-                            <i class="tio-download"></i> {{ translate('Download PDF') }}
-                        </button>
+            <div class="card-body p-20px">
+                <div class="order-top">
+                    <div class="card--header">
+                        <form action="{{ url()->current() }}" method="GET">
+                            <div class="input-group">
+                                <input id="datatableSearch_" type="search" name="search" class="form-control"
+                                    placeholder="{{ translate('Ex : Search by Order ID') }}"
+                                    aria-label="Search" value="{{ $search }}" required autocomplete="off">
+                                <div class="input-group-append">
+                                    <button type="submit" class="input-group-text">
+                                        {{ translate('Search') }}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="table-responsive datatable-custom">
+                    <form id="bulkAssignForm" method="POST" action="{{ route('admin.picking.bulk-assign') }}">
+                        @csrf
+                        <table class="table table-hover table-borderless table-thead-bordered table-nowrap table-align-middle card-table">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" id="select-all">
+                                    </th>
+                                    <th>{{ translate('#') }}</th>
+                                    <th class="table-column-pl-0">{{ translate('order ID') }}</th>
+                                    <th>{{ translate('customer') }}</th>
+                                    <th>{{ translate('branch') }}</th>
+                                    <th>{{ translate('items count') }}</th>
+                                    <th>{{ translate('total amount') }}</th>
+                                    <th>{{ translate('status') }}</th>
+                                    <th>
+                                        <div class="text-center">
+                                            {{ translate('action') }}
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="set-rows">
+                                @foreach ($orders as $key => $order)
+                                    <tr class="status-{{ $order['order_status'] }} class-all">
+                                        <td>
+                                            <input type="checkbox" name="order_ids[]" value="{{ $order->id }}" class="order-checkbox">
+                                        </td>
+                                        <td class="">
+                                            {{ $orders->firstItem() + $key }}
+                                        </td>
+                                        <td class="table-column-pl-0">
+                                            <a href="{{ route('admin.picking.show', ['order_id' => $order['id']]) }}">{{ $order['id'] }}</a>
+                                        </td>
+                                        <td>
+                                            @if ($order->is_guest == 0)
+                                                @if (isset($order->customer))
+                                                    <div>
+                                                        <a class="text-body text-capitalize font-medium"
+                                                            href="{{ route('admin.customer.view', [$order['user_id']]) }}">
+                                                            {{ $order->customer['f_name'] . ' ' . $order->customer['l_name'] }}
+                                                        </a>
+                                                    </div>
+                                                    <a class="d-block text-body font-size-sm"
+                                                        href="tel:{{ $order->customer['phone'] }}">{{ $order->customer['phone'] }}</a>
+                                                @else
+                                                    <span class="text-muted">{{ translate('Customer not found') }}</span>
+                                                @endif
+                                            @else
+                                                <span class="text-muted">{{ translate('Guest Customer') }}</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($order->branch)
+                                                {{ $order->branch->name }}
+                                            @else
+                                                <span class="badge badge-danger">{{ translate('Branch deleted') }}</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            {{ $order->details->count() }}
+                                        </td>
+                                        <td>
+                                            {{ \App\CentralLogics\Helpers::set_symbol($order['order_amount']) }}
+                                        </td>
+                                        <td>
+                                            @if ($order->order_status == 'confirmed')
+                                                <span class="badge badge-soft-info">{{ translate('confirmed') }}</span>
+                                            @elseif($order->order_status == 'picking')
+                                                <span class="badge badge-soft-warning">{{ translate('picking') }}</span>
+                                            @elseif($order->order_status == 'processing')
+                                                <span class="badge badge-soft-primary">{{ translate('processing') }}</span>
+                                            @elseif($order->order_status == 'packaging')
+                                                <span class="badge badge-soft-dark">{{ translate('packaging') }}</span>
+                                            @endif
+                                            
+                                            @if ($order->all_picked ?? false)
+                                                <br><span class="badge badge-success mt-1">{{ translate('Picked') }} ✓</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="btn--container justify-content-center">
+                                                <a class="btn action-btn btn--primary btn-outline-primary"
+                                                    href="{{ route('admin.picking.show', ['order_id' => $order['id']]) }}">
+                                                    <i class="tio-invisible"></i> {{ translate('Pick') }}
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+
+                        <!-- Bulk Assign Section -->
+                        <div class="card mt-3">
+                            <div class="card-body">
+                                <h5>{{ translate('Bulk Assign Delivery Man') }}</h5>
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <select class="custom-select" name="delivery_man_id" id="delivery_man_id" required>
+                                            <option value="">{{ translate('Select Delivery Man') }}</option>
+                                            @foreach ($deliveryMen as $dm)
+                                                <option value="{{ $dm->id }}">{{ $dm->f_name }} {{ $dm->l_name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button type="submit" class="btn btn-primary" id="bulkAssignBtn">
+                                            {{ translate('Assign Selected Orders') }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </form>
                 </div>
 
-                <!-- Orders Table -->
-                <div class="table-responsive datatable-custom">
-                    <table class="table table-borderless table-thead-bordered table-nowrap card-table">
-                        <thead class="thead-light">
-                            <tr>
-                                <th>{{ translate('Order ID') }}</th>
-                                <th>{{ translate('Order Date') }}</th>
-                                <th>{{ translate('Store') }}</th>
-                                <th>{{ translate('Route') }}</th>
-                                <th>{{ translate('Branch') }}</th>
-                                <th>{{ translate('Items') }}</th>
-                                <th>{{ translate('Total Weight') }}</th>
-                                <th>{{ translate('Status') }}</th>
-                                <th>{{ translate('Action') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse ($orders as $order)
-                                <tr>
-                                    <td>
-                                        <a href="{{ route('admin.picking.show', [$order['id']]) }}">{{ $order['id'] }}</a>
-                                    </td>
-                                    <td>
-                                        {{ date('Y-m-d H:i', strtotime($order['created_at'])) }}
-                                    </td>
-                                    <td>
-                                        {{ $order->store->store_name ?? translate('N/A') }}
-                                    </td>
-                                    <td>
-                                        {{ $order->store->route_name ?? translate('N/A') }}
-                                    </td>
-                                    <td>
-                                        {{ $order->branch->name ?? translate('N/A') }}
-                                    </td>
-                                    <td>
-                                        {{ $order->details->count() }}
-                                    </td>
-                                    <td>
-                                        {{ number_format($order->total_weight ?? 0, 2) }} kg
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-soft-{{ $order['order_status'] == 'pending' ? 'warning' : 'info' }}">
-                                            {{ translate($order['order_status']) }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <a class="btn btn-sm btn-outline-primary" href="{{ route('admin.picking.show', [$order['id']]) }}">
-                                            <i class="tio-visible"></i> {{ translate('View') }}
-                                        </a>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="9" class="text-center">{{ translate('No orders found') }}</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
                 <div class="card-footer">
-                    {!! $orders->links() !!}
+                    {!! $orders->links('pagination::bootstrap-4') !!}
                 </div>
             </div>
         </div>
@@ -183,10 +213,30 @@
 
 @push('script_2')
     <script>
-        $(document).ready(function() {
-            $('.js-flatpickr').each(function() {
-                $.HSCore.components.HSFlatpickr.init($(this));
+        // Select all checkbox
+        document.getElementById('select-all').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.order-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
             });
+        });
+
+        // Bulk assign form validation
+        document.getElementById('bulkAssignForm').addEventListener('submit', function(e) {
+            const checkedBoxes = document.querySelectorAll('.order-checkbox:checked');
+            const deliveryManId = document.getElementById('delivery_man_id').value;
+
+            if (checkedBoxes.length === 0) {
+                e.preventDefault();
+                toastr.error('{{ translate("Please select at least one order") }}');
+                return false;
+            }
+
+            if (!deliveryManId) {
+                e.preventDefault();
+                toastr.error('{{ translate("Please select a delivery man") }}');
+                return false;
+            }
         });
     </script>
 @endpush

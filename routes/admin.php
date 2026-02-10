@@ -9,6 +9,8 @@ use App\Http\Controllers\Admin\WalletBonusController;
 use App\Http\Controllers\Admin\OfflinePaymentMethodController;
 use App\Http\Controllers\Admin\AttributeController;
 use App\Http\Controllers\Admin\BannerController;
+use App\Http\Controllers\Admin\OrderReturnController;
+use App\Http\Controllers\Admin\CreditNoteController;
 use App\Http\Controllers\Admin\BranchController;
 use App\Http\Controllers\Admin\BusinessSettingsController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -58,6 +60,13 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
     });
 
     Route::group(['middleware' => ['admin', 'employee_active_check']], function () {
+        
+Route::get('credit-note/{id}', [CreditNoteController::class, 'show'])
+    ->name('credit-note.show');
+
+Route::get('credit-note/{id}/pdf', [CreditNoteController::class, 'pdf'])
+    ->name('credit-note.pdf');
+
         Route::resource('sales-person', SalesPersonController::class);
         Route::resource('inventories', InventoryController::class);
         Route::post('inventories/reset-password', [InventoryController::class, 'resetPassword'])
@@ -66,14 +75,19 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
             Route::get('/create', [DeliveryTripController::class, 'create'])->name('delivery_trips.create');
             Route::post('/store', [DeliveryTripController::class, 'store'])->name('delivery_trips.store');
         });
-
-        Route::resource('stores', StoreController::class);
-        Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
-            ->name('stores.updateSalesPerson');
+       Route::get('stores/pending-self', [StoreController::class, 'pendingSelf'])->name('stores.pendingSelf');
+Route::patch('stores/{store}/approve-self', [StoreController::class, 'approveSelf'])->name('stores.approveSelf');
+Route::patch('stores/{store}/reject-self', [StoreController::class, 'rejectSelf'])->name('stores.rejectSelf');
+Route::resource('stores', StoreController::class);
+Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
+    ->name('stores.updateSalesPerson');
         Route::resource('roles-access', RolesAccessController::class);
 
 
+        //Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('fcm-test');     //test route
+
         Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('dashboard');     //test route
+
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
         Route::post('order-stats', [DashboardController::class, 'orderStats'])->name('order-stats');
         Route::get('settings', [SystemController::class, 'settings'])->name('settings');
@@ -222,6 +236,10 @@ Route::group(['namespace' => 'Admin', 'as' => 'admin.'], function () {
 
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
+             Route::post(
+                'returns/process',
+                [OrderReturnController::class, 'process']
+            )->name('returns.process');
             Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
             Route::post('return', [OrderController::class, 'returnOrderItem'])->name('return');
             Route::get('status', [OrderController::class, 'status'])->name('status');
@@ -250,6 +268,14 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
         ->name('product.price');
     Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])
         ->name('supplier.products');
+        });
+
+        Route::group(['prefix' => 'picking', 'as' => 'picking.'], function () {
+            Route::get('/', [PickingController::class, 'index'])->name('index');
+            Route::get('/{order_id}', [PickingController::class, 'show'])->name('show');
+            Route::post('/pick-item', [PickingController::class, 'pickItem'])->name('pick-item');
+            Route::post('/{order_id}/complete', [PickingController::class, 'completePicking'])->name('complete');
+            Route::post('/bulk-assign', [PickingController::class, 'bulkAssignDeliveryMan'])->name('bulk-assign');
         });
 
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
@@ -567,28 +593,6 @@ Route::get('/admin/report/sale-report/export', [ReportController::class, 'export
     ->name('admin.report.sales.export');
 
 
-Route::post(
-    '/orders/credit-note',
-    [OrderController::class, 'createCreditNote']
-)->name('orders.credit-note');
-
-Route::post('/admin/orders/return', 
-    [App\Http\Controllers\Admin\OrderController::class, 'returnOrderItem']
-)->name('orders.return');
-
-
-Route::group([
-    'prefix' => 'admin',
-    'as' => 'admin.',
-    'middleware' => ['admin']
-], function () {
-
-    Route::post(
-        '/orders/credit-note/create',
-        [OrderController::class, 'createCreditNote']
-    )->name('orders.credit-note.create');
-
-});
 
 
        

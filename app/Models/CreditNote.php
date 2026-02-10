@@ -1,6 +1,9 @@
+<?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Model\Order;
 
 class CreditNote extends Model
 {
@@ -15,9 +18,13 @@ class CreditNote extends Model
         'reason'
     ];
 
-    
-    public function items()
+      public function items()
     {
-        return $this->hasMany(CreditNoteItem::class);
+        return $this->hasMany(CreditNoteItem::class, 'credit_note_id');
+    }
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class, 'order_id');
     }
 }

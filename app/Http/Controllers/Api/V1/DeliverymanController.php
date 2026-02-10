@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\Api\V1;
-
+use App\Services\StorePaymentFifoService;
 use App\CentralLogics\CustomerLogic;
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
