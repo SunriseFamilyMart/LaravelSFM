@@ -268,6 +268,9 @@ class Helpers
 
     public static function set_symbol($amount)
     {
+        // Defensive cast: Remove commas from previously formatted strings and convert to float
+        // to prevent TypeError in number_format() if $amount is a string (e.g., "1,234.56")
+        $amount = (float) str_replace(',', '', (string) $amount);
         $decimal_point_settings = Helpers::get_business_settings('decimal_point_settings');
         $position = Helpers::get_business_settings('currency_symbol_position');
         if (!is_null($position) && $position == 'left') {

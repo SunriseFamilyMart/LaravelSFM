@@ -2,7 +2,7 @@
     <div class="dashboard--card h-100 bg-gradient-primary">
         <h6 class="subtitle text-white">{{translate('total_sales')}}</h6>
         <h2 class="title text-white">
-            {{ Helpers::set_symbol(number_format($metrics['total_sales'], 2)) }}
+            {{ Helpers::set_symbol($metrics['total_sales']) }}
         </h2>
         <img src="{{asset('/public/assets/admin/img/dashboard/1.png')}}" alt="" class="dashboard-icon">
     </div>
@@ -12,7 +12,7 @@
     <div class="dashboard--card h-100 bg-gradient-success">
         <h6 class="subtitle text-white">{{translate('total_purchases')}}</h6>
         <h2 class="title text-white">
-            {{ Helpers::set_symbol(number_format($metrics['total_purchases'], 2)) }}
+            {{ Helpers::set_symbol($metrics['total_purchases']) }}
         </h2>
         <img src="{{asset('/public/assets/admin/img/dashboard/2.png')}}" alt="" class="dashboard-icon">
     </div>
@@ -42,7 +42,7 @@
     <div class="dashboard--card h-100 bg-gradient-danger">
         <h6 class="subtitle text-white">{{translate('profit')}}</h6>
         <h2 class="title text-white">
-            {{ Helpers::set_symbol(number_format($metrics['profit'], 2)) }}
+            {{ Helpers::set_symbol($metrics['profit']) }}
         </h2>
         <img src="{{asset('/public/assets/admin/img/dashboard/confirmed.png')}}" alt="" class="dashboard-icon">
     </div>
