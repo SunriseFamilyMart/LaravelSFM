@@ -298,6 +298,12 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::post('update-deliveryDate', [OrderController::class, 'updateDeliveryDate'])->name('update-deliveryDate');
         });
 
+        Route::group(['prefix' => 'picking', 'as' => 'picking.', 'middleware' => ['module:order_management']], function () {
+            Route::get('/', [PickingController::class, 'index'])->name('index');
+            Route::get('/export-pdf', [PickingController::class, 'exportPdf'])->name('export-pdf');
+            Route::get('/show/{id}', [PickingController::class, 'show'])->name('show');
+        });
+
         Route::group(['prefix' => 'category', 'as' => 'category.', 'middleware' => ['module:product_management']], function () {
             Route::get('add', [CategoryController::class, 'index'])->name('add');
             Route::get('add-sub-category', [CategoryController::class, 'subIndex'])->name('add-sub-category');
