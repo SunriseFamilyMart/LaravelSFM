@@ -43,12 +43,21 @@ class PickingController extends Controller
         $queryParam = [];
         $search = $request['search'] ?? null;
         $branchId = $request['branch_id'] ?? 'all';
+        $from = $request['from'] ?? null;
+        $to = $request['to'] ?? null;
 
         $branches = $this->branch->all();
         $deliveryMen = $this->deliveryMan->all();
 
         $query = $this->order->with(['customer', 'branch', 'details', 'pickingItems'])
             ->whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging']);
+
+        // Date filter
+        if ($request->has('from') && $request->has('to')) {
+            $query->whereBetween('created_at', [$request->from . ' 00:00:00', $request->to . ' 23:59:59']);
+            $queryParam['from'] = $from;
+            $queryParam['to'] = $to;
+        }
 
         // Branch filter
         if ($branchId && $branchId != 'all') {
@@ -72,7 +81,7 @@ class PickingController extends Controller
             ->paginate(Helpers::getPagination())
             ->appends($queryParam);
 
-        return view('admin-views.picking.index', compact('orders', 'branches', 'deliveryMen', 'search', 'branchId'));
+        return view('admin-views.picking.index', compact('orders', 'branches', 'deliveryMen', 'search', 'branchId', 'from', 'to'));
     }
 
     /**
@@ -110,7 +119,9 @@ class PickingController extends Controller
             $order->load('pickingItems');
         }
 
-        return view('admin-views.picking.show', compact('order'));
+        $deliveryMen = $this->deliveryMan->all();
+
+        return view('admin-views.picking.show', compact('order', 'deliveryMen'));
     }
 
     /**
@@ -180,10 +191,11 @@ class PickingController extends Controller
     /**
      * Complete the picking process
      *
+     * @param Request $request
      * @param $order_id
      * @return RedirectResponse
      */
-    public function completePicking($order_id): RedirectResponse
+    public function completePicking(Request $request, $order_id): RedirectResponse
     {
         $order = $this->order->with(['pickingItems', 'details'])->find($order_id);
 
@@ -192,15 +204,53 @@ class PickingController extends Controller
             return redirect()->route('admin.picking.index');
         }
 
-        // Check if all items are picked (not pending)
-        $pendingItems = $order->pickingItems->where('status', 'pending');
-        if ($pendingItems->count() > 0) {
-            Toastr::error(translate('All items must be picked before completing'));
-            return redirect()->back();
-        }
-
         DB::beginTransaction();
         try {
+            // Get missing items data from request
+            $missingItems = $request->input('missing_items', []);
+            $missingQty = $request->input('missing_qty', []);
+            $missingReason = $request->input('missing_reason', []);
+
+            // Process all picking items
+            foreach ($order->pickingItems as $pickingItem) {
+                // Check if this item is marked as missing
+                if (in_array($pickingItem->id, $missingItems)) {
+                    // Item is marked as missing
+                    $itemMissingQty = isset($missingQty[$pickingItem->id]) ? (int)$missingQty[$pickingItem->id] : 0;
+                    $itemMissingReason = $missingReason[$pickingItem->id] ?? null;
+
+                    // Validate missing qty
+                    if ($itemMissingQty > $pickingItem->ordered_qty) {
+                        $itemMissingQty = $pickingItem->ordered_qty;
+                    }
+
+                    $itemPickedQty = $pickingItem->ordered_qty - $itemMissingQty;
+
+                    // Determine status
+                    if ($itemPickedQty == 0) {
+                        $status = 'missing';
+                    } else {
+                        $status = 'partial';
+                    }
+
+                    $pickingItem->picked_qty = $itemPickedQty;
+                    $pickingItem->missing_qty = $itemMissingQty;
+                    $pickingItem->missing_reason = $itemMissingReason;
+                    $pickingItem->status = $status;
+                } else {
+                    // Item is NOT marked as missing - auto picked fully
+                    $pickingItem->picked_qty = $pickingItem->ordered_qty;
+                    $pickingItem->missing_qty = 0;
+                    $pickingItem->missing_reason = null;
+                    $pickingItem->status = 'picked';
+                }
+
+                // Set picked_by and picked_at
+                $pickingItem->picked_by = auth()->id();
+                $pickingItem->picked_at = now();
+                $pickingItem->save();
+            }
+
             // Recalculate order amount based on picked quantities
             $newOrderAmount = 0;
 
@@ -219,7 +269,7 @@ class PickingController extends Controller
                 }
             }
 
-            // Update order amount
+            // Update order amount and status
             $order->order_amount = $newOrderAmount;
             $order->order_status = 'processing';
             $order->save();
@@ -227,7 +277,7 @@ class PickingController extends Controller
             DB::commit();
 
             Toastr::success(translate('Picking completed successfully'));
-            return redirect()->route('admin.picking.index');
+            return redirect()->route('admin.picking.show', ['order_id' => $order->id]);
         } catch (\Exception $e) {
             DB::rollBack();
             Toastr::error(translate('Failed to complete picking: ') . $e->getMessage());
