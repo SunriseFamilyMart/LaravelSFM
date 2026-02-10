@@ -502,6 +502,19 @@ class DashboardController extends Controller
         $dateTo = $request?->input('date_to');
         $branchId = $request?->input('branch_id');
 
+        // Validate date inputs to prevent injection
+        if ($dateFrom && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
+            $dateFrom = null;
+        }
+        if ($dateTo && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
+            $dateTo = null;
+        }
+        
+        // Validate branch_id is numeric
+        if ($branchId && !is_numeric($branchId)) {
+            $branchId = null;
+        }
+
         // Base query with filters
         $orderQuery = $this->order->query();
         $purchaseQuery = $this->adminPurchase->query();
@@ -512,7 +525,7 @@ class DashboardController extends Controller
         }
 
         if ($branchId) {
-            $orderQuery->where('branch_id', $branchId);
+            $orderQuery->where('branch_id', (int)$branchId);
         }
 
         // Total Sales (from delivered orders)
