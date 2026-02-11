@@ -433,7 +433,7 @@ class StoreAuthController extends Controller
             'confirm_password' => 'required|string|same:new_password',
         ]);
 
-        if (!Hash::check($request->current_password, $store->password ?? '')) {
+        if (empty($store->password) || !Hash::check($request->current_password, $store->password)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Current password is incorrect.',
