@@ -30,7 +30,6 @@ return new class extends Migration
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-                echo "Inserted default content for: {$key}\n";
             } elseif (empty($existing->value) || trim($existing->value) === '' || $existing->value === '<p></p>') {
                 // Key exists but value is empty or just empty HTML - update with default content
                 DB::table('business_settings')
@@ -39,14 +38,9 @@ return new class extends Migration
                         'value' => $content,
                         'updated_at' => now(),
                     ]);
-                echo "Updated default content for: {$key}\n";
-            } else {
-                // Key exists with non-empty content - respect admin content, don't overwrite
-                echo "Skipped {$key} - already has content\n";
             }
+            // If key exists with non-empty content - respect admin content, don't overwrite
         }
-
-        echo "Policy pages population completed.\n";
     }
 
     /**
