@@ -405,4 +405,47 @@ class StoreAuthController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Logged out'], 200);
     }
+
+    /**
+     * POST /api/v1/store/change-password
+     * Authenticated store can change their password.
+     */
+    public function changePassword(Request $request)
+    {
+        /** @var \App\Models\Store|null $store */
+        $store = $request->attributes->get('auth_store');
+
+        if (!$store) {
+            $token = $request->header('Authorization') ?: $request->header('X-Store-Token');
+            if (!$token) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized. Missing token.'], 401);
+            }
+            $token = trim(str_replace('Bearer ', '', $token));
+            $store = Store::where('auth_token', $token)->first();
+            if (!$store) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized. Invalid token.'], 401);
+            }
+        }
+
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password'     => 'required|string|min:6|different:current_password',
+            'confirm_password' => 'required|string|same:new_password',
+        ]);
+
+        if (empty($store->password) || !Hash::check($request->current_password, $store->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Current password is incorrect.',
+            ], 401);
+        }
+
+        $store->password = Hash::make($request->new_password);
+        $store->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully.',
+        ], 200);
+    }
 }
