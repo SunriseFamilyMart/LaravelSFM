@@ -155,6 +155,13 @@ class Helpers
                 $item['category_discount'] = [];
             }
 
+            // ===== BULK DISCOUNTS =====
+            $item['bulk_discounts'] = \App\Model\BulkDiscount::where('product_id', $item['id'])
+                ->where('status', 1)
+                ->orderBy('min_quantity', 'asc')
+                ->get(['id', 'min_quantity', 'discount_percent'])
+                ->toArray();
+
             // ===== VARIATIONS =====
             $variations = [];
             $decoded = json_decode($item['variations'] ?? '[]', true);
@@ -206,7 +213,18 @@ class Helpers
         return $storage;
     }
 
+    // ===== SINGLE PRODUCT PATH =====
     \Log::info('PDF END SINGLE');
+    
+    // Add bulk discounts to single product
+    if (isset($data['id'])) {
+        $data['bulk_discounts'] = \App\Model\BulkDiscount::where('product_id', $data['id'])
+            ->where('status', 1)
+            ->orderBy('min_quantity', 'asc')
+            ->get(['id', 'min_quantity', 'discount_percent'])
+            ->toArray();
+    }
+    
     return $data;
 }
 

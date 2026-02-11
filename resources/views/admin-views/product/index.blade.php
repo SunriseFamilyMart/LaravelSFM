@@ -358,6 +358,26 @@
                 </div>
             </div>
 
+            <div class="col-lg-12">
+                <div class="card mt-2">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <span class="card-header-icon"><i class="tio-layers-outlined"></i></span>
+                            <span>{{ translate('Bulk Discounts') }}</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">{{ translate('Set quantity-based discounts. Customers buying more will get extra discount.') }}</p>
+                        <div id="bulk-discount-rows">
+                            <p class="text-muted" id="no-bulk-msg">{{ translate('No bulk discounts added yet.') }}</p>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="add-bulk-row">
+                            <i class="tio-add"></i> {{ translate('Add Tier') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-12">
                 <div class="btn--container justify-content-end">
                     <a href="" class="btn btn--reset min-w-120px">{{ translate('reset') }}</a>
@@ -624,6 +644,46 @@
             } else {
                 $("#tax_symbol").html('')
             }
+        });
+    </script>
+
+    <script>
+        // Bulk Discount Dynamic Rows
+        let bulkRowIndex = 0;
+
+        $('#add-bulk-row').click(function() {
+            $('#no-bulk-msg').hide();
+            let html = `
+            <div class="row mb-2 bulk-discount-row align-items-center">
+                <div class="col-md-3">
+                    <label class="input-label">{{ translate('Min Quantity') }}</label>
+                    <input type="number" name="bulk_discounts[${bulkRowIndex}][min_quantity]"
+                           class="form-control" min="2" placeholder="e.g. 5" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="input-label">{{ translate('Discount') }} (%)</label>
+                    <input type="number" name="bulk_discounts[${bulkRowIndex}][discount_percent]"
+                           class="form-control" min="0" max="100" step="0.01" placeholder="e.g. 5" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="input-label">{{ translate('Status') }}</label>
+                    <select name="bulk_discounts[${bulkRowIndex}][status]" class="form-control">
+                        <option value="1">{{ translate('Active') }}</option>
+                        <option value="0">{{ translate('Inactive') }}</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-danger btn-sm remove-bulk-row mt-4">
+                        <i class="tio-delete"></i> {{ translate('Remove') }}
+                    </button>
+                </div>
+            </div>`;
+            $('#bulk-discount-rows').append(html);
+            bulkRowIndex++;
+        });
+
+        $(document).on('click', '.remove-bulk-row', function() {
+            $(this).closest('.bulk-discount-row').remove();
         });
     </script>
 @endpush
