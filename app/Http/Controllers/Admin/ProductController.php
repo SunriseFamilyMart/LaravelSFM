@@ -337,6 +337,20 @@ class ProductController extends Controller
 
         $this->translation->insert($data);
 
+        // Save Bulk Discounts
+        if ($request->has('bulk_discounts')) {
+            foreach ($request->bulk_discounts as $tier) {
+                if (!empty($tier['min_quantity']) && isset($tier['discount_percent'])) {
+                    \App\Model\BulkDiscount::create([
+                        'product_id' => $product->id,
+                        'min_quantity' => (int) $tier['min_quantity'],
+                        'discount_percent' => (float) $tier['discount_percent'],
+                        'status' => (int) ($tier['status'] ?? 1),
+                    ]);
+                }
+            }
+        }
+
         return response()->json([], 200);
     }
 
@@ -587,6 +601,26 @@ class ProductController extends Controller
                 );
             }
         }
+
+        // Save Bulk Discounts — delete old tiers and re-create
+        if ($request->has('bulk_discounts')) {
+            \App\Model\BulkDiscount::where('product_id', $product->id)->delete();
+
+            foreach ($request->bulk_discounts as $tier) {
+                if (!empty($tier['min_quantity']) && isset($tier['discount_percent'])) {
+                    \App\Model\BulkDiscount::create([
+                        'product_id' => $product->id,
+                        'min_quantity' => (int) $tier['min_quantity'],
+                        'discount_percent' => (float) $tier['discount_percent'],
+                        'status' => (int) ($tier['status'] ?? 1),
+                    ]);
+                }
+            }
+        } else {
+            // If no bulk_discounts key in request, remove all existing tiers
+            \App\Model\BulkDiscount::where('product_id', $product->id)->delete();
+        }
+
         return response()->json([], 200);
     }
 

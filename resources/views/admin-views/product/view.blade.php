@@ -180,6 +180,42 @@
             </div>
         </div>
 
+        @php
+            $bulkDiscounts = \App\Model\BulkDiscount::where('product_id', $product->id)
+                ->orderBy('min_quantity', 'asc')->get();
+        @endphp
+        @if($bulkDiscounts->count() > 0)
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="card-title">{{ translate('Bulk Discounts') }}</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-bordered">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>{{ translate('Min Quantity') }}</th>
+                            <th>{{ translate('Discount') }} (%)</th>
+                            <th>{{ translate('Status') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($bulkDiscounts as $bd)
+                        <tr>
+                            <td>{{ $bd->min_quantity }}+</td>
+                            <td>{{ $bd->discount_percent }}%</td>
+                            <td>
+                                <span class="badge badge-{{ $bd->status ? 'success' : 'danger' }}">
+                                    {{ $bd->status ? translate('Active') : translate('Inactive') }}
+                                </span>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
+
         <div class="card">
             <div class="card-header border-0">
                 <h5 class="card-title">{{translate('product reviews')}}</h5>

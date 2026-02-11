@@ -115,4 +115,9 @@ class Product extends Model
         return \App\Model\Category::whereIn('id', $categoryIds)->get();
     }
 
+    public function bulkDiscounts()
+    {
+        return $this->hasMany(BulkDiscount::class)->where('status', 1)->orderBy('min_quantity', 'asc');
+    }
+
 }
