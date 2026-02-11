@@ -27,6 +27,7 @@ Route::prefix('v1/store')->group(function () {
         Route::get('/me', [StoreAuthController::class, 'me']);
         Route::get('/arrear', [StoreAuthController::class, 'getArrear']);
         Route::post('/logout', [StoreAuthController::class, 'logout']);
+        Route::post('/change-password', [StoreAuthController::class, 'changePassword']);
     });
 
 });
