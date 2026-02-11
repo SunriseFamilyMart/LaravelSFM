@@ -37,7 +37,7 @@ jobs:
             git checkout "$BRANCH"
 
             echo "⬇ Pulling latest changes..."
-            git pull origin "$BRANCH"
+            git pull --no-rebase origin "$BRANCH"
 
             echo "🧹 Clearing Laravel caches..."
             php artisan optimize:clear
