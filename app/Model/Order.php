@@ -152,6 +152,14 @@ class Order extends Model
         return $this->hasMany(PaymentAllocation::class, 'order_id');
     }
 
+    /**
+     * Order payments (legacy - for backward compatibility)
+     */
+    public function payments()
+    {
+        return $this->hasMany(\App\Models\OrderPayment::class, 'order_id');
+    }
+
 
     public function editLogs()
     {
