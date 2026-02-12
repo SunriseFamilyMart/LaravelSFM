@@ -44,4 +44,19 @@ class Store extends Model
         return $this->belongsTo(SalesPerson::class, 'sales_person_id')->withDefault();
     }
 
-}
+    /**
+     * Relationship: A store has many orders
+     */
+    public function orders()
+    {
+        return $this->hasMany(\App\Model\Order::class, 'store_id');
+    }
+
+    /**
+     * Relationship: A store has many payment ledgers
+     */
+    public function paymentLedgers()
+    {
+        return $this->hasMany(PaymentLedger::class, 'store_id');
+    }
+

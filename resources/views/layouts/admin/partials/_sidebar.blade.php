@@ -254,6 +254,28 @@
                                             </span>
                                         </a>
                                     </li>
+                                    <li
+                                        class="nav-item {{ Request::is('admin/delivery-details/payment-collection') ? 'active' : '' }}">
+                                        <a class="nav-link"
+                                            href="{{ route('admin.delivery-details.payment-collection') }}"
+                                            title="{{ translate('Payment Collection') }}">
+                                            <span class="tio-circle nav-indicator-icon"></span>
+                                            <span class="text-truncate sidebar--badge-container">
+                                                <span>{{ translate('Payment Collection') }}</span>
+                                            </span>
+                                        </a>
+                                    </li>
+                                    <li
+                                        class="nav-item {{ Request::is('admin/delivery-details/upi-verification') ? 'active' : '' }}">
+                                        <a class="nav-link"
+                                            href="{{ route('admin.delivery-details.upi-verification') }}"
+                                            title="{{ translate('UPI Verification') }}">
+                                            <span class="tio-circle nav-indicator-icon"></span>
+                                            <span class="text-truncate sidebar--badge-container">
+                                                <span>{{ translate('UPI Verification') }}</span>
+                                            </span>
+                                        </a>
+                                    </li>
                                 </ul>
                             </li>
                         @endif

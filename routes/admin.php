@@ -302,6 +302,10 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
             Route::get('list', [DeliveryDetailsController::class, 'index'])->name('list');
             Route::get('status/{status}', [DeliveryDetailsController::class, 'status'])->name('status');
             Route::get('view/{id}', [DeliveryDetailsController::class, 'view'])->name('view');
+            Route::get('payment-collection', [DeliveryDetailsController::class, 'paymentCollection'])->name('payment-collection');
+            Route::post('payment-collection/record', [DeliveryDetailsController::class, 'recordPayment'])->name('payment-collection.record');
+            Route::get('upi-verification', [DeliveryDetailsController::class, 'upiVerification'])->name('upi-verification');
+            Route::post('upi-verification/update', [DeliveryDetailsController::class, 'updateUpiStatus'])->name('upi-verification.update');
         });
 
         Route::group(['prefix' => 'picking', 'as' => 'picking.', 'middleware' => ['module:order_management']], function () {
