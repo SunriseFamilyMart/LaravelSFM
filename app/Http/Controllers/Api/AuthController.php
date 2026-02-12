@@ -582,16 +582,18 @@ public function myStores(Request $request)
         'created_at'
     )->latest()->get();
 
-    // ➕ Add arrear_amount for each store (unchanged)
+    // ➕ Add arrear_amount for each store
     foreach ($stores as $store) {
-
-        $arrear = DB::table('orders as o')
-            ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
-            ->where('o.store_id', $store->id)
-            ->selectRaw('SUM(o.order_amount - COALESCE(op.first_payment, 0)) as arrear_amount')
+        $arrear = DB::table('orders')
+            ->where('store_id', $store->id)
+            ->whereNotIn('order_status', ['cancelled', 'failed'])
+            ->selectRaw('
+                COALESCE(SUM(order_amount + COALESCE(total_tax_amount,0) + COALESCE(delivery_charge,0) - COALESCE(coupon_discount_amount,0)),0) as total_order,
+                COALESCE(SUM(paid_amount),0) as total_paid
+            ')
             ->first();
 
-        $store->arrear_amount = $arrear->arrear_amount ?? 0;
+        $store->arrear_amount = max(($arrear->total_order ?? 0) - ($arrear->total_paid ?? 0), 0);
     }
 
     return response()->json([
@@ -623,16 +625,15 @@ if (!$salesPerson) {
     ], 401);
 }
 
-$orders = DB::table('orders as o')
-    ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+$orders = DB::table('orders')
+    ->whereNotIn('order_status', ['cancelled', 'failed'])
     ->selectRaw('
-        o.id as order_id,
-        o.order_amount as order_amount,
-        COALESCE(SUM(op.amount), 0) as total_paid,
-        (o.order_amount - COALESCE(SUM(op.amount), 0)) as arrear_balance
+        id as order_id,
+        order_amount,
+        COALESCE(paid_amount, 0) as total_paid,
+        (order_amount + COALESCE(total_tax_amount,0) - COALESCE(paid_amount,0)) as arrear_balance
     ')
-    ->groupBy('o.id', 'o.order_amount')
-    ->orderByDesc('o.id')
+    ->orderByDesc('id')
     ->get();
 
 return response()->json([

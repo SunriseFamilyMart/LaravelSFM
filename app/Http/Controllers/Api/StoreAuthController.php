@@ -7,7 +7,6 @@ use App\Models\Store;
 use App\Models\StoreOtp;
 use App\Models\SalesPerson;
 use App\Models\Order;
-use App\Models\OrderPayment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -321,9 +320,9 @@ class StoreAuthController extends Controller
      */
     private function calculateStoreArrear($storeId)
     {
-        // Get all orders for this store that are not cancelled/returned/failed
+        // Get all orders for this store that are not cancelled/failed
         $orders = Order::where('store_id', $storeId)
-            ->whereNotIn('order_status', ['cancelled', 'failed', 'returned'])
+            ->whereNotIn('order_status', ['cancelled', 'failed'])
             ->get();
 
         $totalOrderAmount = 0;
@@ -332,24 +331,15 @@ class StoreAuthController extends Controller
 
         foreach ($orders as $order) {
             // Calculate order total
-            $orderTotal = ($order->order_amount ?? 0) + 
-                          ($order->delivery_charge ?? 0) + 
-                          ($order->total_tax_amount ?? 0) - 
+            $orderTotal = ($order->order_amount ?? 0) +
+                          ($order->delivery_charge ?? 0) +
+                          ($order->total_tax_amount ?? 0) -
                           ($order->coupon_discount_amount ?? 0);
-            
+
             $totalOrderAmount += $orderTotal;
 
-            // Get paid amount for this order from order_payments table
-            // payment_status = 'complete' means payment is done
-            $paidAmount = OrderPayment::where('order_id', $order->id)
-                ->where('payment_status', 'complete')
-                ->sum('amount');
-
-            // Also check if order itself is marked as paid
-            if ($order->payment_status === 'paid' && $paidAmount < $orderTotal) {
-                $paidAmount = $orderTotal;
-            }
-
+            // Get paid amount directly from orders table (updated by FIFO service)
+            $paidAmount = $order->paid_amount ?? 0;
             $totalPaidAmount += $paidAmount;
 
             // Track unpaid orders
@@ -360,17 +350,14 @@ class StoreAuthController extends Controller
                     'order_total' => round($orderTotal, 2),
                     'paid_amount' => round($paidAmount, 2),
                     'due_amount' => round($dueAmount, 2),
-                    'order_date' => $order->created_at ? $order->created_at->format('Y-m-d') : null,
+                    'order_date' => $order->created_at?->format('Y-m-d'),
                     'order_status' => $order->order_status,
                     'payment_status' => $order->payment_status,
                 ];
             }
         }
 
-        $totalArrear = $totalOrderAmount - $totalPaidAmount;
-        if ($totalArrear < 0) {
-            $totalArrear = 0;
-        }
+        $totalArrear = max($totalOrderAmount - $totalPaidAmount, 0);
 
         return [
             'total_arrear' => round($totalArrear, 2),
