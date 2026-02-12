@@ -262,13 +262,14 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
 
         Route::group(['prefix' => 'orders', 'as' => 'orders.', 'middleware' => ['module:order_management']], function () {
             Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
-             Route::post(
+            Route::post(
                 'returns/process',
                 [OrderReturnController::class, 'process']
             )->name('returns.process');
             Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
             Route::post('return', [OrderController::class, 'returnOrderItem'])->name('return');
             Route::get('status', [OrderController::class, 'status'])->name('status');
+            Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
             Route::get('add-delivery-man/{order_id}/{delivery_man_id}', [OrderController::class, 'addDeliveryman'])->name('add-delivery-man');
             Route::get('payment-status', [OrderController::class, 'paymentStatus'])->name('payment-status');
             Route::get('generate-invoice/{id}', [OrderController::class, 'generateInvoice'])->name('generate-invoice')->withoutMiddleware(['module:order_management']);
@@ -278,22 +279,17 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
             Route::get('export/{status}', [OrderController::class, 'exportOrders'])->name('export');
             Route::get('verify-offline-payment/{order_id}/{status}', [OrderController::class, 'verifyOfflinePayment']);
             Route::post('update-order-delivery-area/{order_id}', [OrderController::class, 'updateOrderDeliveryArea'])->name('update-order-delivery-area');
-         Route::get('ordermanagement', [OrderController::class, 'orderManagement'])->name('ordermanagement'); 
-      
-  Route::get('/orders/create', [OrderController::class, 'createOrder'])
-        ->name('orders.create');
-
-    Route::post('/orders/store', [OrderController::class, 'storeOrder'])
-        ->name('orders.store');
-Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
-    ->name('orders.update');
- Route::post('update/{id}', [OrderController::class, 'updateOrder'])->name('update');
-   
-    // AJAX ROUTES (must be inside admin/ )
-     Route::get('/product-price/{id}', [OrderController::class, 'getProductPrice'])
-        ->name('product.price');
-    Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])
-        ->name('supplier.products');
+            Route::post('update-shipping/{id}', [OrderController::class, 'updateShipping'])->name('update-shipping');
+            Route::post('update-timeSlot', [OrderController::class, 'updateTimeSlot'])->name('update-timeSlot');
+            Route::post('update-deliveryDate', [OrderController::class, 'updateDeliveryDate'])->name('update-deliveryDate');
+            Route::get('ordermanagement', [OrderController::class, 'orderManagement'])->name('ordermanagement');
+            Route::get('/orders/create', [OrderController::class, 'createOrder'])->name('orders.create');
+            Route::post('/orders/store', [OrderController::class, 'storeOrder'])->name('orders.store');
+            Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])->name('orders.update');
+            Route::post('update/{id}', [OrderController::class, 'updateOrder'])->name('update');
+            // AJAX ROUTES (must be inside admin/ )
+            Route::get('/product-price/{id}', [OrderController::class, 'getProductPrice'])->name('product.price');
+            Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])->name('supplier.products');
         });
 
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
@@ -306,14 +302,10 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::get('list', [DeliveryDetailsController::class, 'index'])->name('list');
             Route::get('status/{status}', [DeliveryDetailsController::class, 'status'])->name('status');
             Route::get('view/{id}', [DeliveryDetailsController::class, 'view'])->name('view');
-        });
-
-        Route::group(['prefix' => 'order', 'as' => 'order.', 'middleware' => ['module:order_management']], function () {
-            Route::get('list/{status}', [OrderController::class, 'list'])->name('list');
-            Route::put('status-update/{id}', [OrderController::class, 'status'])->name('status-update');
-            Route::post('update-shipping/{id}', [OrderController::class, 'updateShipping'])->name('update-shipping');
-            Route::post('update-timeSlot', [OrderController::class, 'updateTimeSlot'])->name('update-timeSlot');
-            Route::post('update-deliveryDate', [OrderController::class, 'updateDeliveryDate'])->name('update-deliveryDate');
+            Route::get('payment-collection', [DeliveryDetailsController::class, 'paymentCollection'])->name('payment-collection');
+            Route::post('payment-collection/record', [DeliveryDetailsController::class, 'recordPayment'])->name('payment-collection.record');
+            Route::get('upi-verification', [DeliveryDetailsController::class, 'upiVerification'])->name('upi-verification');
+            Route::post('upi-verification/update', [DeliveryDetailsController::class, 'updateUpiStatus'])->name('upi-verification.update');
         });
 
         Route::group(['prefix' => 'picking', 'as' => 'picking.', 'middleware' => ['module:order_management']], function () {
