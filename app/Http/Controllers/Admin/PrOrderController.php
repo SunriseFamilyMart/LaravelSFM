@@ -11,14 +11,12 @@ use App\Model\DeliveryMan;
 use App\Model\PrOrder;
 use App\Model\OrderDetail;
 use App\Model\Product;
-use App\Models\OrderPayment;
 
 
 use App\Models\Supplier;
 use App\Models\DeliveryChargeByArea;
 use App\Models\OfflinePayment;
 use App\Models\OrderArea;
-use App\Models\OrderPartialPayment;
 use App\Traits\HelperTrait;
 use App\User;
 use Box\Spout\Common\Exception\InvalidArgumentException;
