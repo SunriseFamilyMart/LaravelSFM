@@ -124,31 +124,6 @@
                                             </span>
                                         </a>
                                     </li>
-                                    <li class="nav-item {{ Request::is('admin/picking*') ? 'active' : '' }}">
-                                        <a class="nav-link" href="{{ route('admin.picking.index') }}"
-                                            title="{{ translate('picking') }}">
-                                            <span class="tio-circle nav-indicator-icon"></span>
-                                            <span class="text-truncate sidebar--badge-container">
-                                                <span>{{ translate('picking') }}</span>
-                                                <span class="badge badge-soft-info badge-pill ml-1">
-                                                    {{ \App\Model\Order::whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging'])->count() }}
-                                                </span>
-                                            </span>
-                                        </a>
-                                    </li>
-                                    <li
-                                        class="nav-item {{ Request::is('admin/picking*') ? 'active' : '' }}">
-                                        <a class="nav-link " href="{{ route('admin.picking.index') }}"
-                                            title="{{ translate('picking') }}">
-                                            <span class="tio-circle nav-indicator-icon"></span>
-                                            <span class="text-truncate  sidebar--badge-container">
-                                                <span>{{ translate('picking') }}</span>
-                                                <span class="badge badge-soft-warning badge-pill ml-1">
-                                                    {{ \App\Model\Order::whereIn('order_status', ['pending', 'processing'])->count() }}
-                                                </span>
-                                            </span>
-                                        </a>
-                                    </li>
                                     <li
                                         class="nav-item {{ Request::is('admin/orders/list/out_for_delivery') ? 'active' : '' }}">
                                         <a class="nav-link "
@@ -174,20 +149,6 @@
                                                     {{-- {{ \App\Model\Order::notPos()->where(['order_status' => 'delivered'])->count() }} --}}
                                                     {{ \App\Model\Order::where(['order_status' => 'delivered'])->count() }}
                                                 </span>
-                                            </span>
-                                        </a>
-                                    </li>
-                                    <li
-                                        class="nav-item {{ Request::is('admin/orders/list/returned') ? 'active' : '' }}">
-                                        <a class="nav-link " href="{{ route('admin.orders.list', ['returned']) }}"
-                                            title="{{ translate('returned_orders') }}">
-                                            <span class="tio-circle nav-indicator-icon"></span>
-                                            <span class="text-truncate  sidebar--badge-container">
-                                                <span>{{ translate('returned') }}</span>
-                                               <span class="badge badge-soft-danger badge-pill ml-1">
-    {{ \App\Model\Order::whereIn('order_status', ['returned', 'partial_delivered'])->count() }}
-</span>
-
                                             </span>
                                         </a>
                                     </li>
@@ -219,6 +180,34 @@
                                         </a>
                                     </li>
                                 </ul>
+                            </li>
+
+                            {{-- Picking as separate sidebar item --}}
+                            <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/picking*') ? 'active' : '' }}">
+                                <a class="js-navbar-vertical-aside-menu-link nav-link"
+                                    href="{{ route('admin.picking.index') }}" title="{{ translate('picking') }}">
+                                    <i class="tio-archive nav-icon"></i>
+                                    <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                        {{ translate('picking') }}
+                                        <span class="badge badge-soft-info badge-pill ml-1">
+                                            {{ \App\Model\Order::whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging'])->count() }}
+                                        </span>
+                                    </span>
+                                </a>
+                            </li>
+
+                            {{-- Returned as separate sidebar item --}}
+                            <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/orders/list/returned') ? 'active' : '' }}">
+                                <a class="js-navbar-vertical-aside-menu-link nav-link"
+                                    href="{{ route('admin.orders.list', ['returned']) }}" title="{{ translate('returned_orders') }}">
+                                    <i class="tio-undo nav-icon"></i>
+                                    <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                        {{ translate('returned') }}
+                                        <span class="badge badge-soft-danger badge-pill ml-1">
+                                            {{ \App\Model\Order::whereIn('order_status', ['returned', 'partial_delivered'])->count() }}
+                                        </span>
+                                    </span>
+                                </a>
                             </li>
 
                             <li
