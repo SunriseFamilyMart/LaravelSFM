@@ -11,14 +11,12 @@ use App\Model\DeliveryMan;
 use App\Model\Order;
 use App\Model\OrderDetail;
 use App\Model\Product;
-use App\Models\OrderPayment;
-
-
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use App\Models\Supplier;
 use App\Models\DeliveryChargeByArea;
 use App\Models\OfflinePayment;
 use App\Models\OrderArea;
-use App\Models\OrderPartialPayment;
 use App\Traits\HelperTrait;
 use App\User;
 use Box\Spout\Common\Exception\InvalidArgumentException;
@@ -173,13 +171,8 @@ public function orderManagement(Request $request)
 
     $limit = $request->get('limit', 10);
 
-    // Fetch orders with related details + only completed payments
-    $orders = Order::with([
-            'details.product.supplier',
-            'payments' => function ($q) {
-                $q->where('payment_status', 'complete'); // ONLY completed payments
-            }
-        ])
+    // Fetch orders with related details
+    $orders = Order::with(['details.product.supplier'])
         ->when($status, fn ($q) => $q->where('order_status', $status))
         ->whereHas('details', function ($q) use ($productId, $supplierId) {
             if ($productId) {
@@ -197,11 +190,8 @@ public function orderManagement(Request $request)
     /* ================= SUMMARY ================= */
     $orderCollection = collect($orders->items());
 
-    // Calculate only COMPLETE payment amounts
-    $totalPaid = $orderCollection->sum(function ($order) {
-        return $order->payments->where('payment_status', 'complete')->sum('amount');
-    });
-
+    // Use orders.paid_amount directly (updated by FIFO service)
+    $totalPaid = $orderCollection->sum('paid_amount');
     $totalPurchase = $orderCollection->sum('order_amount');
 
     $summary = [
@@ -241,13 +231,12 @@ public function updateOrder(Request $request, $id)
         'payment_status'  => 'nullable|string|in:pending,complete,failed',
     ]);
 
-    $order = Order::with('payments', 'orderDetails')->findOrFail($id);
+    $order = Order::with('orderDetails')->findOrFail($id);
 
     $orderTotal = (float) $order->order_amount;
 
-    $alreadyPaid = OrderPayment::where('order_id', $order->id)
-        ->where('payment_status', 'complete')
-        ->sum('amount');
+    // Use orders.paid_amount directly
+    $alreadyPaid = $order->paid_amount ?? 0;
 
     if ($request->paid_amount > 0) {
         $remainingDue = $orderTotal - $alreadyPaid;
@@ -295,10 +284,8 @@ public function updateOrder(Request $request, $id)
     );
     }
 
-    // Recalculate total paid
-    $totalPaid = OrderPayment::where('order_id', $order->id)
-        ->where('payment_status', 'complete')
-        ->sum('amount');
+    // Use orders.paid_amount directly
+    $totalPaid = $order->paid_amount ?? 0;
 
     $order->payment_status = $totalPaid >= $orderTotal ? 'Paid' : 'Unpaid';
     $order->save();
@@ -412,34 +399,34 @@ public function storeOrder(Request $request)
     /** ---------------- PAYMENT LOGIC ---------------- */
     $paid = $request->paid ?? 0;
 
-    // Prevent overpayment
-    $totalPaidSoFar = OrderPayment::where('order_id', $order->id)->sum('amount');
-    if (($totalPaidSoFar + $paid) > $total) {
+    if ($paid > $total) {
         return back()->withErrors([
-            'paid' => "Total paid amount cannot exceed order total (₹" . number_format($total, 2) . ")"
+            'paid' => "Paid amount cannot exceed order total (₹" . number_format($total, 2) . ")"
         ])->withInput();
     }
 
-    // Payment status complete if paid > 0
-    $paymentStatus = ($paid > 0) ? 'complete' : 'incomplete';
+    if ($paid > 0) {
+        // Create payment ledger and allocation
+        $ledger = PaymentLedger::create([
+            'store_id'        => $order->store_id,
+            'order_id'        => $order->id,
+            'entry_type'      => 'CREDIT',
+            'amount'          => $paid,
+            'payment_method'  => $request->payment_mode,
+            'remarks'         => 'Admin order payment',
+        ]);
 
-    /** STORE PAYMENT */
-    OrderPayment::create([
-        'order_id' => $order->id,
-        'payment_method' => $request->payment_mode,
-        'amount' => $paid, // Only this transaction amount
-        'first_payment' => $paid, // optional, can remove if you don't need
-        'second_payment' => 0,    // optional
-        'first_payment_date' => now(),
-        'second_payment_date' => null,
-        'payment_status' => $paymentStatus,
-        'payment_date' => now(),
-    ]);
+        PaymentAllocation::create([
+            'payment_ledger_id' => $ledger->id,
+            'order_id'          => $order->id,
+            'allocated_amount'  => $paid,
+        ]);
 
-    /** UPDATE ORDER PAYMENT STATUS */
-    $totalPaid = OrderPayment::where('order_id', $order->id)->sum('amount');
-    $order->payment_status = ($totalPaid >= $total) ? 'complete' : 'partial';
-    $order->save();
+        // Update order - increment paid_amount
+        $order->paid_amount = ($order->paid_amount ?? 0) + $paid;
+        $order->payment_status = ($order->paid_amount >= $total) ? 'paid' : 'partial';
+        $order->save();
+    }
 
     return redirect()->route('admin.orders.ordermanagement')
         ->with('success', 'Order created successfully.');
@@ -635,16 +622,33 @@ public function storeOrder(Request $request)
                 }
             }
 
-            if ($order['payment_method'] == 'cash_on_delivery') {
-                $partialData = OrderPartialPayment::where(['order_id' => $order->id])->first();
-                if ($partialData) {
-                    $partial = new OrderPartialPayment;
-                    $partial->order_id = $order['id'];
-                    $partial->paid_with = 'cash_on_delivery';
-                    $partial->paid_amount = $partialData->due_amount;
-                    $partial->due_amount = 0;
-                    $partial->save();
-                }
+            // Record COD payment when order is delivered
+            if ($request->order_status == 'delivered' && $order->payment_method == 'cash_on_delivery') {
+                $orderTotal = ($order->order_amount ?? 0) +
+                             ($order->total_tax_amount ?? 0) +
+                             ($order->delivery_charge ?? 0) -
+                             ($order->coupon_discount_amount ?? 0);
+
+                // Create payment ledger and allocation
+                $ledger = PaymentLedger::create([
+                    'store_id'       => $order->store_id,
+                    'order_id'       => $order->id,
+                    'entry_type'     => 'CREDIT',
+                    'amount'         => $orderTotal,
+                    'payment_method' => 'cash_on_delivery',
+                    'remarks'        => 'COD collected on delivery',
+                ]);
+
+                PaymentAllocation::create([
+                    'payment_ledger_id' => $ledger->id,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $orderTotal,
+                ]);
+
+                $order->update([
+                    'paid_amount'    => $orderTotal,
+                    'payment_status' => 'paid',
+                ]);
             }
         }
 

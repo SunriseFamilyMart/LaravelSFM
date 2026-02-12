@@ -9,7 +9,6 @@ use App\Model\BusinessSetting;
 use App\Model\DeliveryHistory;
 use App\Model\DeliveryMan;
 use App\Model\Order;
-use App\Models\OrderPartialPayment;
 use App\Traits\HelperTrait;
 use App\User;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Models\DeliveryTrip;
-use App\Models\OrderPayment;
 use App\Model\OrderDetail;
 use App\Model\OrderEditLog;
 
@@ -988,6 +986,11 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
     }
 
 
+    /**
+     * @deprecated This method uses legacy OrderPayment. Use StorePaymentFifoService instead.
+     * 
+     * Store payment for order
+     */
     public function store(Request $request)
     {
         // 1️⃣ Validate input
@@ -1057,6 +1060,11 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'payment_status' => $order->payment_status
         ], 200);
     }
+    /**
+     * @deprecated This method uses legacy OrderPayment. Use StorePaymentFifoService instead.
+     * 
+     * Store flexible payment (multiple payment methods for one order)
+     */
     public function storeFlexiblePayment(Request $request)
     {
         // -------------------- VALIDATION --------------------
@@ -1235,12 +1243,14 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
         // ----------- PAYMENT DETAILS -----------
         $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
-        $paidAmount = OrderPayment::where('order_id', $order->id)
-            ->where('payment_status', 'complete')
-            ->sum('amount');
+        $paidAmount = $order->paid_amount ?? 0;
 
-        $payments = OrderPayment::where('order_id', $order->id)
-            ->orderBy('created_at', 'desc')
+        // Get payments from payment_allocations joined with payment_ledgers
+        $payments = DB::table('payment_allocations as pa')
+            ->join('payment_ledgers as pl', 'pa.payment_ledger_id', '=', 'pl.id')
+            ->where('pa.order_id', $order->id)
+            ->select('pl.*', 'pa.allocated_amount')
+            ->orderBy('pl.created_at', 'desc')
             ->get();
 
         // ----------- RESPONSE -----------
@@ -1281,13 +1291,22 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             ], 401);
         }
 
-        // 3️⃣ Fetch order payments related to this user/store
-        // Assuming deliveryman can only see orders assigned to them
-        $payments = OrderPayment::with('order')
-            ->whereHas('order', function ($q) use ($deliveryman) {
-                $q->where('delivery_man_id', $deliveryman->id);
-            })
-            ->orderBy('created_at', 'desc')
+        // 3️⃣ Fetch payment ledgers with allocations for orders assigned to this deliveryman
+        $payments = DB::table('payment_ledgers as pl')
+            ->join('payment_allocations as pa', 'pl.id', '=', 'pa.payment_ledger_id')
+            ->join('orders as o', 'pa.order_id', '=', 'o.id')
+            ->where('o.delivery_man_id', $deliveryman->id)
+            ->select(
+                'pl.id',
+                'pl.transaction_ref',
+                'pl.amount',
+                'pl.payment_method',
+                'pl.entry_type',
+                'pl.created_at',
+                'pa.order_id',
+                'pa.allocated_amount'
+            )
+            ->orderBy('pl.created_at', 'desc')
             ->get();
 
         // 4️⃣ Return response
@@ -1318,17 +1337,16 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ], 401);
     }
 
-    $orders = DB::table('orders as o')
-        ->leftJoin('order_payments as op', 'o.id', '=', 'op.order_id')
+    $orders = DB::table('orders')
+        ->whereNotIn('order_status', ['cancelled', 'failed'])
+        ->where('delivery_man_id', $deliveryman->id) // Filter by deliveryman
         ->selectRaw('
-            o.id as order_id,
-            o.order_amount as order_amount,
-            COALESCE(SUM(op.amount), 0) as total_paid,
-            (o.order_amount - COALESCE(SUM(op.amount), 0)) as arrear_balance
+            id as order_id,
+            order_amount,
+            COALESCE(paid_amount, 0) as total_paid,
+            (order_amount + COALESCE(total_tax_amount,0) - COALESCE(paid_amount,0)) as arrear_balance
         ')
-        ->where('o.delivery_man_id', $deliveryman->id) // Filter by deliveryman
-        ->groupBy('o.id', 'o.order_amount')
-        ->orderByDesc('o.id')
+        ->orderByDesc('id')
         ->get();
 
    
@@ -1343,8 +1361,9 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
     public function getPaymentMethods()
     {
-        // Fetch distinct payment methods from the table
-        $methods = \App\Models\OrderPayment::select('payment_method')
+        // Fetch distinct payment methods from payment_ledgers
+        $methods = DB::table('payment_ledgers')
+            ->select('payment_method')
             ->distinct()
             ->whereNotNull('payment_method')
             ->pluck('payment_method');

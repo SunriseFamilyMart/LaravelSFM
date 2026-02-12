@@ -14,7 +14,8 @@ use App\Model\Product;
 use App\Models\DeliveryChargeByArea;
 use App\Models\OfflinePayment;
 use App\Models\OrderArea;
-use App\Models\OrderPartialPayment;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use App\Traits\HelperTrait;
 use App\User;
 use Box\Spout\Common\Exception\InvalidArgumentException;
@@ -277,16 +278,33 @@ class OrderController extends Controller
                 }
             }
 
-            if ($order['payment_method'] == 'cash_on_delivery'){
-                $partialData = OrderPartialPayment::where(['order_id' => $order->id])->first();
-                if ($partialData){
-                    $partial = new OrderPartialPayment;
-                    $partial->order_id = $order['id'];
-                    $partial->paid_with = 'cash_on_delivery';
-                    $partial->paid_amount = $partialData->due_amount;
-                    $partial->due_amount = 0;
-                    $partial->save();
-                }
+            // Record COD payment when order is delivered
+            if ($request->order_status == 'delivered' && $order->payment_method == 'cash_on_delivery') {
+                $orderTotal = ($order->order_amount ?? 0) +
+                             ($order->total_tax_amount ?? 0) +
+                             ($order->delivery_charge ?? 0) -
+                             ($order->coupon_discount_amount ?? 0);
+
+                // Create payment ledger and allocation
+                $ledger = PaymentLedger::create([
+                    'store_id'       => $order->store_id,
+                    'order_id'       => $order->id,
+                    'entry_type'     => 'CREDIT',
+                    'amount'         => $orderTotal,
+                    'payment_method' => 'cash_on_delivery',
+                    'remarks'        => 'COD collected on delivery',
+                ]);
+
+                PaymentAllocation::create([
+                    'payment_ledger_id' => $ledger->id,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $orderTotal,
+                ]);
+
+                $order->update([
+                    'paid_amount'    => $orderTotal,
+                    'payment_status' => 'paid',
+                ]);
             }
         }
 

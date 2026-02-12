@@ -168,85 +168,36 @@ class StoreController extends Controller
         ")->first();
 
         // ---------------- TOTAL PAID ----------------
-        $totalPaid = DB::table('order_payments as op')
-            ->join('orders as o', 'o.id', '=', 'op.order_id')
-            ->where('o.store_id', $store->id)
-            ->where('op.payment_status', 'complete')
-            ->when($orderId, fn($q) => $q->where('o.id', $orderId))
-            ->when($fromDate && $toDate, fn($q) => $q->whereBetween('o.created_at', [$fromDate, $toDate]))
-            ->sum('op.amount');
+        $totalPaid = DB::table('orders')
+            ->where('store_id', $store->id)
+            ->whereNotIn('order_status', ['cancelled', 'failed'])
+            ->when($orderId, fn($q) => $q->where('id', $orderId))
+            ->when($fromDate && $toDate, fn($q) => $q->whereBetween('created_at', [$fromDate, $toDate]))
+            ->sum('paid_amount');
 
         $summary->total_paid = $totalPaid;
         $summary->outstanding_amount = ($summary->total_order_amount ?? 0) - $totalPaid;
 
-        // ---------------- CHECK IF NEW COLUMNS EXIST ----------------
-        $hasAdjustmentColumns = $this->checkAdjustmentColumnsExist();
-
         // ---------------- ORDERS WITH PAYMENTS ----------------
-        if ($hasAdjustmentColumns) {
-            // Use the new adjustment tracking columns
-            $ordersQuery = DB::table('orders as o')
-                ->leftJoin('order_payments as op_direct', function ($join) {
-                    $join->on('o.id', '=', 'op_direct.order_id')
-                         ->where('op_direct.payment_status', 'complete')
-                         ->where(function($q) {
-                             $q->whereNull('op_direct.is_adjustment')
-                               ->orWhere('op_direct.is_adjustment', 0);
-                         });
-                })
-                ->leftJoin('order_payments as op_adjust', function ($join) {
-                    $join->on('o.id', '=', 'op_adjust.order_id')
-                         ->where('op_adjust.payment_status', 'complete')
-                         ->where('op_adjust.is_adjustment', 1);
-                })
-                ->where('o.store_id', $store->id)
-                ->when($orderId, fn($q) => $q->where('o.id', $orderId))
-                ->when($fromDate && $toDate, fn($q) => $q->whereBetween('o.created_at', [$fromDate, $toDate]));
+        // Use orders.paid_amount directly (updated by FIFO service)
+        $ordersQuery = DB::table('orders as o')
+            ->where('o.store_id', $store->id)
+            ->when($orderId, fn($q) => $q->where('o.id', $orderId))
+            ->when($fromDate && $toDate, fn($q) => $q->whereBetween('o.created_at', [$fromDate, $toDate]));
 
-            $orders = $ordersQuery->selectRaw("
-                o.id,
-                o.order_amount,
-                o.total_tax_amount,
-                (COALESCE(o.order_amount,0) + COALESCE(o.total_tax_amount,0)) AS total_amount,
-                o.order_status,
-                o.payment_status,
-                SUM(COALESCE(op_direct.amount,0)) AS direct_paid,
-                SUM(COALESCE(op_adjust.amount,0)) AS adjusted_value,
-                (SUM(COALESCE(op_direct.amount,0)) + SUM(COALESCE(op_adjust.amount,0))) AS total_paid,
-                DATE(o.created_at) AS order_date
-            ")
-            ->groupBy('o.id', 'o.order_amount', 'o.total_tax_amount', 'o.order_status', 'o.payment_status', 'o.created_at')
-            ->orderBy('o.created_at', 'DESC')
-            ->paginate(10, ['*'], 'orders_page')
-            ->withQueryString();
-        } else {
-            // Fallback: Use simple payment tracking without adjustments
-            $ordersQuery = DB::table('orders as o')
-                ->leftJoin('order_payments as op', function ($join) {
-                    $join->on('o.id', '=', 'op.order_id')
-                         ->where('op.payment_status', 'complete');
-                })
-                ->where('o.store_id', $store->id)
-                ->when($orderId, fn($q) => $q->where('o.id', $orderId))
-                ->when($fromDate && $toDate, fn($q) => $q->whereBetween('o.created_at', [$fromDate, $toDate]));
-
-            $orders = $ordersQuery->selectRaw("
-                o.id,
-                o.order_amount,
-                o.total_tax_amount,
-                (COALESCE(o.order_amount,0) + COALESCE(o.total_tax_amount,0)) AS total_amount,
-                o.order_status,
-                o.payment_status,
-                SUM(COALESCE(op.amount,0)) AS direct_paid,
-                0 AS adjusted_value,
-                SUM(COALESCE(op.amount,0)) AS total_paid,
-                DATE(o.created_at) AS order_date
-            ")
-            ->groupBy('o.id', 'o.order_amount', 'o.total_tax_amount', 'o.order_status', 'o.payment_status', 'o.created_at')
-            ->orderBy('o.created_at', 'DESC')
-            ->paginate(10, ['*'], 'orders_page')
-            ->withQueryString();
-        }
+        $orders = $ordersQuery->selectRaw("
+            o.id,
+            o.order_amount,
+            o.total_tax_amount,
+            (COALESCE(o.order_amount,0) + COALESCE(o.total_tax_amount,0)) AS total_amount,
+            o.order_status,
+            o.payment_status,
+            COALESCE(o.paid_amount,0) AS total_paid,
+            DATE(o.created_at) AS order_date
+        ")
+        ->orderBy('o.created_at', 'DESC')
+        ->paginate(10, ['*'], 'orders_page')
+        ->withQueryString();
 
         // Calculate pending amount for each order
         $orders->getCollection()->transform(function ($order) {

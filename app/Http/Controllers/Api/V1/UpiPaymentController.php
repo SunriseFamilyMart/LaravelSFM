@@ -4,7 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
-use App\Models\OrderPayment;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use App\Models\OrderDetail;
 use App\Models\UpiTransaction;
 use App\Models\Store;
@@ -191,21 +192,27 @@ $merchantName = 'Sunrise Family Mart';
                 // Update order payment status
                 $order = Order::find($transaction->order_id);
                 if ($order) {
-                    $order->update(['payment_status' => 'paid']);
+                    // Create payment ledger and allocation
+                    $ledger = PaymentLedger::create([
+                        'store_id'        => $order->store_id,
+                        'order_id'        => $order->id,
+                        'entry_type'      => 'CREDIT',
+                        'amount'          => $transaction->amount,
+                        'payment_method'  => 'upi',
+                        'transaction_ref' => $request->txn_id,
+                        'remarks'         => 'UPI payment verification',
+                    ]);
 
-                    // Create/Update order payment record
-                    OrderPayment::updateOrCreate(
-                        ['order_id' => $order->id],
-                        [
-                            'payment_method' => 'upi',
-                            'transaction_id' => $request->txn_id,
-                            'first_payment' => $transaction->amount,
-                            'first_payment_date' => now(),
-                            'payment_status' => 'complete',
-                            'amount' => $transaction->amount,
-                            'payment_date' => now(),
-                        ]
-                    );
+                    PaymentAllocation::create([
+                        'payment_ledger_id' => $ledger->id,
+                        'order_id'          => $order->id,
+                        'allocated_amount'  => $transaction->amount,
+                    ]);
+
+                    $order->update([
+                        'paid_amount'    => $transaction->amount,
+                        'payment_status' => 'paid',
+                    ]);
                 }
 
                 Log::info('Delivery Man UPI Payment Success', [
@@ -473,16 +480,26 @@ $merchantName = 'Sunrise Family Mart';
                     'confirmed_at' => now(),
                 ]);
 
-                // Create order payment record
-                OrderPayment::create([
-                    'order_id' => $order->id,
-                    'payment_method' => $transaction->upi_app ?? 'upi',
-                    'transaction_id' => $request->txn_id,
-                    'first_payment' => $transaction->amount,
-                    'first_payment_date' => now(),
-                    'payment_status' => 'complete',
-                    'amount' => $transaction->amount,
-                    'payment_date' => now(),
+                // Create payment ledger and allocation
+                $ledger = PaymentLedger::create([
+                    'store_id'        => $order->store_id,
+                    'order_id'        => $order->id,
+                    'entry_type'      => 'CREDIT',
+                    'amount'          => $transaction->amount,
+                    'payment_method'  => $transaction->upi_app ?? 'upi',
+                    'transaction_ref' => $request->txn_id,
+                    'remarks'         => 'UPI payment for sales person order',
+                ]);
+
+                PaymentAllocation::create([
+                    'payment_ledger_id' => $ledger->id,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $transaction->amount,
+                ]);
+
+                $order->update([
+                    'paid_amount'    => $transaction->amount,
+                    'payment_status' => 'paid',
                 ]);
 
                 DB::commit();
@@ -775,15 +792,26 @@ $merchantName = 'Sunrise Family Mart';
                     'confirmed_at' => now(),
                 ]);
 
-                OrderPayment::create([
-                    'order_id' => $order->id,
-                    'payment_method' => $transaction->upi_app ?? 'upi',
-                    'transaction_id' => $request->txn_id,
-                    'first_payment' => $transaction->amount,
-                    'first_payment_date' => now(),
-                    'payment_status' => 'complete',
-                    'amount' => $transaction->amount,
-                    'payment_date' => now(),
+                // Create payment ledger and allocation
+                $ledger = PaymentLedger::create([
+                    'store_id'        => $store->id,
+                    'order_id'        => $order->id,
+                    'entry_type'      => 'CREDIT',
+                    'amount'          => $transaction->amount,
+                    'payment_method'  => $transaction->upi_app ?? 'upi',
+                    'transaction_ref' => $request->txn_id,
+                    'remarks'         => 'UPI payment confirmed',
+                ]);
+
+                PaymentAllocation::create([
+                    'payment_ledger_id' => $ledger->id,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $transaction->amount,
+                ]);
+
+                $order->update([
+                    'paid_amount'    => $transaction->amount,
+                    'payment_status' => 'paid',
                 ]);
 
                 DB::commit();

@@ -5,6 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
+/**
+ * @deprecated This controller is deprecated. Use PaymentLedger and PaymentAllocation models instead.
+ * All payment operations should be handled through the FIFO payment services:
+ * - App\Services\PaymentFifoService
+ * - App\Services\StorePaymentFifoService
+ */
 class OrderPaymentController extends Controller
 {
     /**

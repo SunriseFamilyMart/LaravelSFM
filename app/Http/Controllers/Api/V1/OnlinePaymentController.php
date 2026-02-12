@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Model\BusinessSetting;
 use App\Model\Order;
-use App\Model\OrderPayment;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -126,8 +127,6 @@ class OnlinePaymentController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
             $order = Order::find($request->order_id);
             
             if (!$order) {
@@ -137,20 +136,8 @@ class OnlinePaymentController extends Controller
                 ], 404);
             }
 
-            // Generate unique payment reference
+            // Generate unique payment reference (no DB record needed until payment is verified)
             $paymentRef = 'PAY' . strtoupper(uniqid()) . rand(100, 999);
-            
-            // Create payment record with pending status
-            $payment = OrderPayment::create([
-                'order_id' => $request->order_id,
-                'payment_method' => 'online_payment',
-                'amount' => $request->amount,
-                'transaction_id' => $paymentRef,
-                'payment_status' => 'pending',
-                'payment_date' => now()->format('Y-m-d'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
 
             // Get UPI details
             $upiId = BusinessSetting::where('key', 'upi_id')->first();
@@ -165,14 +152,11 @@ class OnlinePaymentController extends Controller
                 "Order #{$order->id}"
             );
 
-            DB::commit();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Payment intent created successfully',
                 'data' => [
                     'payment_ref' => $paymentRef,
-                    'payment_id' => $payment->id,
                     'order_id' => $order->id,
                     'amount' => (float) $request->amount,
                     'status' => 'pending',
@@ -213,13 +197,21 @@ class OnlinePaymentController extends Controller
     public function checkStatus($payment_ref)
     {
         try {
-            $payment = OrderPayment::where('transaction_id', $payment_ref)->first();
+            // Check if payment exists in payment_ledgers
+            $payment = DB::table('payment_ledgers')
+                ->where('transaction_ref', $payment_ref)
+                ->first();
 
             if (!$payment) {
+                // Payment not yet verified/created
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not found'
-                ], 404);
+                    'success' => true,
+                    'data' => [
+                        'payment_ref' => $payment_ref,
+                        'status' => 'pending',
+                        'message' => 'Payment not yet verified'
+                    ]
+                ], 200);
             }
 
             $order = Order::find($payment->order_id);
@@ -228,13 +220,12 @@ class OnlinePaymentController extends Controller
                 'success' => true,
                 'data' => [
                     'payment_ref' => $payment_ref,
-                    'status' => $payment->payment_status,
+                    'status' => $payment->entry_type === 'CREDIT' ? 'complete' : 'refund',
                     'amount' => (float) $payment->amount,
                     'order_id' => $payment->order_id,
                     'order_status' => $order ? $order->order_status : null,
                     'payment_method' => $payment->payment_method,
-                    'transaction_id' => $payment->transaction_id,
-                    'verified_at' => $payment->payment_status === 'complete' ? $payment->updated_at : null,
+                    'verified_at' => $payment->created_at,
                     'created_at' => $payment->created_at,
                 ]
             ], 200);
@@ -271,33 +262,26 @@ class OnlinePaymentController extends Controller
         }
 
         try {
-            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
+            // Check if payment exists in payment_ledgers
+            $payment = DB::table('payment_ledgers')
+                ->where('transaction_ref', $request->payment_ref)
+                ->first();
 
-            if (!$payment) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not found'
-                ], 404);
-            }
-
-            if ($payment->payment_status === 'complete') {
+            if ($payment) {
+                // Payment already confirmed, cannot cancel
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot cancel a completed payment'
                 ], 400);
             }
 
-            $payment->update([
-                'payment_status' => 'failed',
-                'updated_at' => now(),
-            ]);
-
+            // No payment record means it was never confirmed, so cancellation is just acknowledgment
             return response()->json([
                 'success' => true,
                 'message' => 'Payment cancelled successfully',
                 'data' => [
                     'payment_ref' => $request->payment_ref,
-                    'status' => 'failed',
+                    'status' => 'cancelled',
                 ]
             ], 200);
 
@@ -322,6 +306,8 @@ class OnlinePaymentController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'payment_ref' => 'required|string',
+            'order_id' => 'required|exists:orders,id',
+            'amount' => 'required|numeric|min:0.01',
             'transaction_id' => 'nullable|string|max:100',
         ]);
 
@@ -336,63 +322,59 @@ class OnlinePaymentController extends Controller
         try {
             DB::beginTransaction();
 
-            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
+            // Check if already confirmed
+            $existing = DB::table('payment_ledgers')
+                ->where('transaction_ref', $request->payment_ref)
+                ->first();
 
-            if (!$payment) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not found'
-                ], 404);
-            }
-
-            if ($payment->payment_status === 'complete') {
+            if ($existing) {
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
                     'message' => 'Payment already confirmed'
                 ], 400);
             }
 
-            // Update payment record
-            $payment->update([
-                'payment_status' => 'complete',
-                'transaction_id' => $request->transaction_id ?? $payment->transaction_id,
-                'updated_at' => now(),
+            $order = Order::find($request->order_id);
+
+            if (!$order) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order not found'
+                ], 404);
+            }
+
+            // Create payment ledger and allocation
+            $ledger = PaymentLedger::create([
+                'store_id'        => $order->store_id,
+                'order_id'        => $order->id,
+                'entry_type'      => 'CREDIT',
+                'amount'          => $request->amount,
+                'payment_method'  => 'online_payment',
+                'transaction_ref' => $request->payment_ref,
+                'remarks'         => 'Online payment confirmed',
             ]);
 
-            // Update order payment status
-            $order = Order::find($payment->order_id);
-            $totalPaid = 0;
-            $totalDue = 0;
-            $remaining = 0;
-            
-            if ($order) {
-                // Calculate total paid amount
-                $totalPaid = OrderPayment::where('order_id', $order->id)
-                    ->where('payment_status', 'complete')
-                    ->sum('amount');
+            PaymentAllocation::create([
+                'payment_ledger_id' => $ledger->id,
+                'order_id'          => $order->id,
+                'allocated_amount'  => $request->amount,
+            ]);
 
-                // Calculate total due
-                $totalDue = $order->order_amount + 
-                           ($order->total_tax_amount ?? 0) + 
-                           ($order->delivery_charge ?? 0) -
-                           ($order->coupon_discount_amount ?? 0);
+            // Update order
+            $newPaidAmount = ($order->paid_amount ?? 0) + $request->amount;
+            $totalDue = $order->order_amount + 
+                       ($order->total_tax_amount ?? 0) + 
+                       ($order->delivery_charge ?? 0) -
+                       ($order->coupon_discount_amount ?? 0);
 
-                // Update order payment status
-                if ($totalPaid >= $totalDue) {
-                    $order->update([
-                        'payment_status' => 'paid',
-                        'updated_at' => now(),
-                    ]);
-                } else {
-                    $order->update([
-                        'payment_status' => 'partial',
-                        'updated_at' => now(),
-                    ]);
-                }
+            $order->update([
+                'paid_amount'    => $newPaidAmount,
+                'payment_status' => ($newPaidAmount >= $totalDue) ? 'paid' : 'partial',
+            ]);
 
-                // Calculate remaining balance
-                $remaining = max(0, $totalDue - $totalPaid);
-            }
+            $remaining = max(0, $totalDue - $newPaidAmount);
 
             DB::commit();
 
@@ -402,11 +384,11 @@ class OnlinePaymentController extends Controller
                 'data' => [
                     'payment_ref' => $request->payment_ref,
                     'status' => 'complete',
-                    'amount' => (float) $payment->amount,
-                    'transaction_id' => $payment->transaction_id,
-                    'order_id' => $payment->order_id,
-                    'order_payment_status' => $order->payment_status ?? 'unknown',
-                    'total_paid' => (float) $totalPaid,
+                    'amount' => (float) $request->amount,
+                    'transaction_id' => $request->transaction_id,
+                    'order_id' => $order->id,
+                    'order_payment_status' => $order->payment_status,
+                    'total_paid' => (float) $newPaidAmount,
                     'total_due' => (float) $totalDue,
                     'remaining' => (float) $remaining,
                     'confirmed_at' => now()->toIso8601String(),
@@ -452,6 +434,8 @@ class OnlinePaymentController extends Controller
     }
 
     /**
+     * @deprecated Pending payments are no longer stored. Use confirmPayment endpoint instead.
+     * 
      * Admin: Manually verify a payment (from admin panel)
      * 
      * @param Request $request
@@ -459,73 +443,11 @@ class OnlinePaymentController extends Controller
      */
     public function adminVerifyPayment(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'payment_ref' => 'required|string',
-            'verified' => 'required|boolean',
-            'admin_note' => 'nullable|string|max:500',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
-
-            if (!$payment) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not found'
-                ], 404);
-            }
-
-            $newStatus = $request->verified ? 'complete' : 'failed';
-
-            $payment->update([
-                'payment_status' => $newStatus,
-                'updated_at' => now(),
-            ]);
-
-            // Update order if verified
-            if ($request->verified) {
-                $order = Order::find($payment->order_id);
-                
-                if ($order) {
-                    $totalPaid = OrderPayment::where('order_id', $order->id)
-                        ->where('payment_status', 'complete')
-                        ->sum('amount');
-
-                    $totalDue = $order->order_amount + 
-                               ($order->total_tax_amount ?? 0) + 
-                               ($order->delivery_charge ?? 0);
-
-                    if ($totalPaid >= $totalDue) {
-                        $order->update(['payment_status' => 'paid']);
-                    } else {
-                        $order->update(['payment_status' => 'partial']);
-                    }
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => $request->verified ? 'Payment verified successfully' : 'Payment marked as failed',
-                'data' => [
-                    'payment_ref' => $request->payment_ref,
-                    'status' => $newStatus,
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'This endpoint is deprecated. Pending payments are no longer stored. Use the confirmPayment endpoint to record verified payments.',
+        ], 410); // 410 Gone
+    }
             Log::error('Error verifying payment: ' . $e->getMessage());
 
             return response()->json([
@@ -559,17 +481,20 @@ class OnlinePaymentController extends Controller
         try {
             $order = Order::find($request->order_id);
             
-            $payments = OrderPayment::where('order_id', $request->order_id)
-                ->orderBy('created_at', 'desc')
+            // Get payments from payment_allocations joined with payment_ledgers
+            $payments = DB::table('payment_allocations as pa')
+                ->join('payment_ledgers as pl', 'pa.payment_ledger_id', '=', 'pl.id')
+                ->where('pa.order_id', $request->order_id)
+                ->orderBy('pl.created_at', 'desc')
                 ->get()
                 ->map(function ($payment) {
                     return [
                         'id' => $payment->id,
-                        'payment_ref' => $payment->transaction_id,
-                        'amount' => (float) $payment->amount,
+                        'payment_ref' => $payment->transaction_ref,
+                        'amount' => (float) $payment->allocated_amount,
                         'payment_method' => $payment->payment_method,
-                        'status' => $payment->payment_status,
-                        'payment_date' => $payment->payment_date,
+                        'status' => $payment->entry_type === 'CREDIT' ? 'complete' : 'refund',
+                        'payment_date' => $payment->created_at,
                         'created_at' => $payment->created_at,
                     ];
                 });
@@ -580,13 +505,8 @@ class OnlinePaymentController extends Controller
                        ($order->delivery_charge ?? 0) -
                        ($order->coupon_discount_amount ?? 0);
 
-            $totalPaid = OrderPayment::where('order_id', $request->order_id)
-                ->where('payment_status', 'complete')
-                ->sum('amount');
-
-            $totalPending = OrderPayment::where('order_id', $request->order_id)
-                ->where('payment_status', 'pending')
-                ->sum('amount');
+            // Use orders.paid_amount directly
+            $totalPaid = $order->paid_amount ?? 0;
 
             return response()->json([
                 'success' => true,
@@ -596,7 +516,7 @@ class OnlinePaymentController extends Controller
                     'summary' => [
                         'total_due' => (float) $totalDue,
                         'total_paid' => (float) $totalPaid,
-                        'total_pending' => (float) $totalPending,
+                        'total_pending' => 0, // No pending concept in new system
                         'remaining' => (float) max(0, $totalDue - $totalPaid),
                         'payment_status' => $order->payment_status,
                     ],
