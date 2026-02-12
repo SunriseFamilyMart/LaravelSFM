@@ -17,9 +17,10 @@ class PaymentAllocation extends Model
     protected $casts = [
         'allocated_amount' => 'float',
         'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
-    public $timestamps = false;
+    public $timestamps = true;
 
     /**
      * Relationship: An allocation belongs to a payment ledger

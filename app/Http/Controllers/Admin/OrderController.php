@@ -424,9 +424,9 @@ public function storeOrder(Request $request)
             'allocated_amount'  => $paid,
         ]);
 
-        // Update order
-        $order->paid_amount = $paid;
-        $order->payment_status = ($paid >= $total) ? 'paid' : 'partial';
+        // Update order - increment paid_amount
+        $order->paid_amount = ($order->paid_amount ?? 0) + $paid;
+        $order->payment_status = ($order->paid_amount >= $total) ? 'paid' : 'partial';
         $order->save();
     }
 

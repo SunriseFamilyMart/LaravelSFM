@@ -16,7 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('payment_ledger_id');
             $table->unsignedBigInteger('order_id');
             $table->decimal('allocated_amount', 14, 2);
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
             // Indexes
             $table->index('payment_ledger_id');
