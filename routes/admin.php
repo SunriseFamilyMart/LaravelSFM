@@ -47,6 +47,7 @@ use App\Http\Controllers\Admin\DeliveryTripController;
 use App\Http\Controllers\Admin\RolesAccessController;
 use App\Http\Controllers\Admin\PickingController;
 use App\Http\Controllers\Admin\AttendanceController;
+use App\Http\Controllers\Admin\PurchaseManagementController;
 
 
 
@@ -83,6 +84,20 @@ Route::resource('stores', StoreController::class);
 Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'updateSalesPerson'])
     ->name('stores.updateSalesPerson');
         Route::resource('roles-access', RolesAccessController::class);
+
+        // Purchase Management Routes
+        Route::group(['prefix' => 'purchase', 'as' => 'purchase.'], function () {
+            Route::get('/', [PurchaseManagementController::class, 'index'])->name('index');
+            Route::get('/create', [PurchaseManagementController::class, 'create'])->name('create');
+            Route::post('/store', [PurchaseManagementController::class, 'store'])->name('store');
+            Route::get('/{id}', [PurchaseManagementController::class, 'show'])->name('show');
+            Route::get('/{id}/edit', [PurchaseManagementController::class, 'edit'])->name('edit');
+            Route::put('/{id}', [PurchaseManagementController::class, 'update'])->name('update');
+            Route::post('/{id}/status', [PurchaseManagementController::class, 'updateStatus'])->name('update-status');
+            Route::post('/{id}/payment', [PurchaseManagementController::class, 'addPayment'])->name('add-payment');
+            Route::post('/{id}/delivery', [PurchaseManagementController::class, 'recordDelivery'])->name('record-delivery');
+            Route::get('/{id}/audit-log', [PurchaseManagementController::class, 'getAuditLog'])->name('audit-log');
+        });
 
 
         //Route::get('/fcm/{id}', [DashboardController::class, 'fcm'])->name('fcm-test');     //test route
