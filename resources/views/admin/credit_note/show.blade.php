@@ -99,11 +99,11 @@
                             <td class="text-right">₹{{ number_format($creditNote->taxable_amount, 2) }}</td>
                         </tr>
                         <tr>
-                            <td class="text-right"><strong>CGST @2.5%:</strong></td>
+                            <td class="text-right"><strong>CGST:</strong></td>
                             <td class="text-right">₹{{ number_format($creditNote->gst_amount / 2, 2) }}</td>
                         </tr>
                         <tr>
-                            <td class="text-right"><strong>SGST @2.5%:</strong></td>
+                            <td class="text-right"><strong>SGST:</strong></td>
                             <td class="text-right">₹{{ number_format($creditNote->gst_amount / 2, 2) }}</td>
                         </tr>
                         <tr class="table-active">

@@ -143,10 +143,10 @@
                     <strong>Subtotal (Taxable):</strong>
                     ₹{{ number_format($creditNote->taxable_amount, 2) }}<br>
 
-                    <strong>CGST @2.5%:</strong>
+                    <strong>CGST:</strong>
                     ₹{{ number_format($creditNote->gst_amount / 2, 2) }}<br>
 
-                    <strong>SGST @2.5%:</strong>
+                    <strong>SGST:</strong>
                     ₹{{ number_format($creditNote->gst_amount / 2, 2) }}<br>
 
                     <strong>Grand Total:</strong>
