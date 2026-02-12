@@ -296,14 +296,6 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
         ->name('supplier.products');
         });
 
-        Route::group(['prefix' => 'picking', 'as' => 'picking.'], function () {
-            Route::get('/', [PickingController::class, 'index'])->name('index');
-            Route::get('/{order_id}', [PickingController::class, 'show'])->name('show');
-            Route::post('/pick-item', [PickingController::class, 'pickItem'])->name('pick-item');
-            Route::post('/{order_id}/complete', [PickingController::class, 'completePicking'])->name('complete');
-            Route::post('/bulk-assign', [PickingController::class, 'bulkAssignDeliveryMan'])->name('bulk-assign');
-        });
-
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
         //     Route::get('list', [OrderController::class, 'list'])->name('list');
         //     Route::get('details/{id}', [OrderController::class, 'details'])->name('details');
@@ -329,6 +321,9 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::get('/export-pdf', [PickingController::class, 'exportPdf'])->name('export-pdf');
             Route::get('/show/{id}', [PickingController::class, 'show'])->name('show');
             Route::get('/invoice-pdf/{order_id}', [PickingController::class, 'invoicePdf'])->name('invoice-pdf');
+            Route::post('/pick-item', [PickingController::class, 'pickItem'])->name('pick-item');
+            Route::post('/{order_id}/complete', [PickingController::class, 'completePicking'])->name('complete');
+            Route::post('/bulk-assign', [PickingController::class, 'bulkAssignDeliveryMan'])->name('bulk-assign');
         });
 
         Route::group(['prefix' => 'category', 'as' => 'category.', 'middleware' => ['module:product_management']], function () {
