@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Model\BusinessSetting;
 use App\Model\Order;
-use App\Model\OrderPayment;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -559,17 +560,20 @@ class OnlinePaymentController extends Controller
         try {
             $order = Order::find($request->order_id);
             
-            $payments = OrderPayment::where('order_id', $request->order_id)
-                ->orderBy('created_at', 'desc')
+            // Get payments from payment_allocations joined with payment_ledgers
+            $payments = DB::table('payment_allocations as pa')
+                ->join('payment_ledgers as pl', 'pa.payment_ledger_id', '=', 'pl.id')
+                ->where('pa.order_id', $request->order_id)
+                ->orderBy('pl.created_at', 'desc')
                 ->get()
                 ->map(function ($payment) {
                     return [
                         'id' => $payment->id,
-                        'payment_ref' => $payment->transaction_id,
-                        'amount' => (float) $payment->amount,
+                        'payment_ref' => $payment->transaction_ref,
+                        'amount' => (float) $payment->allocated_amount,
                         'payment_method' => $payment->payment_method,
-                        'status' => $payment->payment_status,
-                        'payment_date' => $payment->payment_date,
+                        'status' => $payment->entry_type === 'CREDIT' ? 'complete' : 'refund',
+                        'payment_date' => $payment->created_at,
                         'created_at' => $payment->created_at,
                     ];
                 });
@@ -580,13 +584,8 @@ class OnlinePaymentController extends Controller
                        ($order->delivery_charge ?? 0) -
                        ($order->coupon_discount_amount ?? 0);
 
-            $totalPaid = OrderPayment::where('order_id', $request->order_id)
-                ->where('payment_status', 'complete')
-                ->sum('amount');
-
-            $totalPending = OrderPayment::where('order_id', $request->order_id)
-                ->where('payment_status', 'pending')
-                ->sum('amount');
+            // Use orders.paid_amount directly
+            $totalPaid = $order->paid_amount ?? 0;
 
             return response()->json([
                 'success' => true,
@@ -596,7 +595,7 @@ class OnlinePaymentController extends Controller
                     'summary' => [
                         'total_due' => (float) $totalDue,
                         'total_paid' => (float) $totalPaid,
-                        'total_pending' => (float) $totalPending,
+                        'total_pending' => 0, // No pending concept in new system
                         'remaining' => (float) max(0, $totalDue - $totalPaid),
                         'payment_status' => $order->payment_status,
                     ],

@@ -4,7 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
-use App\Models\OrderPayment;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use App\Models\OrderDetail;
 use App\Models\Product;
 use Illuminate\Http\Request;
@@ -97,18 +98,29 @@ class SalesOrderController extends Controller
                 ]);
             }
 
-            // Create payment record
-            OrderPayment::create([
-                'order_id' => $order->id,
-                'payment_method' => $request->payment_method,
-                'payment_status' => $request->payment_status,
-                'transaction_id' => $request->transaction_id,
-                'transaction_ref' => $request->transaction_ref,
-                'amount' => $orderAmount,
-                'paid_at' => $request->payment_status === 'paid' ? now() : null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            // Create payment record if payment is already made (UPI)
+            if ($request->payment_status === 'paid') {
+                $ledger = PaymentLedger::create([
+                    'store_id'        => $request->store_id,
+                    'order_id'        => $order->id,
+                    'entry_type'      => 'CREDIT',
+                    'amount'          => $orderAmount,
+                    'payment_method'  => $request->payment_method,
+                    'transaction_ref' => $request->transaction_id ?? $request->transaction_ref,
+                    'remarks'         => 'Payment at order placement',
+                ]);
+
+                PaymentAllocation::create([
+                    'payment_ledger_id' => $ledger->id,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $orderAmount,
+                ]);
+
+                $order->update([
+                    'paid_amount'    => $orderAmount,
+                    'payment_status' => 'paid',
+                ]);
+            }
 
             // Log payment for audit
             Log::info('Order Payment', [
@@ -162,44 +174,72 @@ class SalesOrderController extends Controller
         ]);
 
         $order = Order::find($request->order_id);
-        $payment = OrderPayment::where('order_id', $request->order_id)->first();
 
-        if (!$order || !$payment) {
+        if (!$order) {
             return response()->json([
                 'success' => false,
-                'message' => 'Order or payment not found',
+                'message' => 'Order not found',
             ], 404);
         }
 
-        // Update payment status
-        $newStatus = $request->status === 'success' ? 'paid' : $request->status;
-        
-        $payment->update([
-            'payment_status' => $newStatus,
-            'transaction_id' => $request->transaction_id,
-            'paid_at' => $newStatus === 'paid' ? now() : null,
-            'updated_at' => now(),
-        ]);
+        // Only process successful payments
+        if ($request->status === 'success') {
+            $orderAmount = $order->order_amount + 
+                          ($order->total_tax_amount ?? 0) +
+                          ($order->delivery_charge ?? 0) -
+                          ($order->coupon_discount_amount ?? 0);
 
-        $order->update([
-            'payment_status' => $newStatus,
-            'updated_at' => now(),
-        ]);
+            // Create payment ledger and allocation
+            $ledger = PaymentLedger::create([
+                'store_id'        => $order->store_id,
+                'order_id'        => $order->id,
+                'entry_type'      => 'CREDIT',
+                'amount'          => $orderAmount,
+                'payment_method'  => $order->payment_method ?? 'online',
+                'transaction_ref' => $request->transaction_id,
+                'remarks'         => 'Payment verified',
+            ]);
 
-        Log::info('Payment Verified', [
-            'order_id' => $order->id,
-            'transaction_id' => $request->transaction_id,
-            'status' => $newStatus,
-        ]);
+            PaymentAllocation::create([
+                'payment_ledger_id' => $ledger->id,
+                'order_id'          => $order->id,
+                'allocated_amount'  => $orderAmount,
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment status updated',
-            'order' => [
-                'id' => $order->id,
-                'payment_status' => $newStatus,
-            ],
-        ]);
+            $order->update([
+                'paid_amount'    => $orderAmount,
+                'payment_status' => 'paid',
+            ]);
+
+            Log::info('Payment Verified', [
+                'order_id' => $order->id,
+                'transaction_id' => $request->transaction_id,
+                'status' => 'paid',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment status updated',
+                'order' => [
+                    'id' => $order->id,
+                    'payment_status' => 'paid',
+                ],
+            ]);
+        } else {
+            // Failed or pending - just update order status
+            $order->update([
+                'payment_status' => $request->status,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment status updated',
+                'order' => [
+                    'id' => $order->id,
+                    'payment_status' => $request->status,
+                ],
+            ]);
+        }
     }
 
     /**
