@@ -6,10 +6,11 @@ use App\Models\GuestUser;
 use App\Models\OfflinePayment;
 use App\Models\OrderArea;
 use App\Models\OrderImage;
-use App\Models\OrderPartialPayment;
 use App\User;
 use App\Models\CreditNote;
 use App\Models\SalesPerson;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Store;
 
@@ -113,15 +114,7 @@ class Order extends Model
         return $this->hasOne(OfflinePayment::class, 'order_id');
     }
 
-    public function partial_payment()
-    {
-        return $this->hasMany(OrderPartialPayment::class, 'order_id')->orderBy('id', 'DESC');
-    }
 
-    public function scopePartial($query)
-    {
-        return $query->whereHas('partial_payment');
-    }
 
     public function order_image()
     {
@@ -143,14 +136,20 @@ class Order extends Model
         return $this->belongsTo(Store::class, 'store_id');
     }
 
-    public function payment()
+    /**
+     * Payment ledgers associated with this order
+     */
+    public function paymentLedgers()
     {
-        return $this->hasOne(\App\Models\OrderPayment::class, 'order_id', 'id');
+        return $this->hasMany(PaymentLedger::class, 'order_id');
     }
 
-    public function payments()
+    /**
+     * Payment allocations for this order
+     */
+    public function paymentAllocations()
     {
-        return $this->hasMany(\App\Models\OrderPayment::class, 'order_id');
+        return $this->hasMany(PaymentAllocation::class, 'order_id');
     }
 
 

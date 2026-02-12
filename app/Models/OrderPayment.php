@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * @deprecated Use App\Models\PaymentLedger instead
+ * 
+ * This model is kept for backward compatibility with existing data in the order_payments table.
+ * DO NOT use this model in new code. All new payment tracking should use PaymentLedger.
+ */
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
