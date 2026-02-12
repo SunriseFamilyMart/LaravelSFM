@@ -197,13 +197,21 @@ class OnlinePaymentController extends Controller
     public function checkStatus($payment_ref)
     {
         try {
-            $payment = OrderPayment::where('transaction_id', $payment_ref)->first();
+            // Check if payment exists in payment_ledgers
+            $payment = DB::table('payment_ledgers')
+                ->where('transaction_ref', $payment_ref)
+                ->first();
 
             if (!$payment) {
+                // Payment not yet verified/created
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not found'
-                ], 404);
+                    'success' => true,
+                    'data' => [
+                        'payment_ref' => $payment_ref,
+                        'status' => 'pending',
+                        'message' => 'Payment not yet verified'
+                    ]
+                ], 200);
             }
 
             $order = Order::find($payment->order_id);
@@ -212,13 +220,12 @@ class OnlinePaymentController extends Controller
                 'success' => true,
                 'data' => [
                     'payment_ref' => $payment_ref,
-                    'status' => $payment->payment_status,
+                    'status' => $payment->entry_type === 'CREDIT' ? 'complete' : 'refund',
                     'amount' => (float) $payment->amount,
                     'order_id' => $payment->order_id,
                     'order_status' => $order ? $order->order_status : null,
                     'payment_method' => $payment->payment_method,
-                    'transaction_id' => $payment->transaction_id,
-                    'verified_at' => $payment->payment_status === 'complete' ? $payment->updated_at : null,
+                    'verified_at' => $payment->created_at,
                     'created_at' => $payment->created_at,
                 ]
             ], 200);
@@ -427,6 +434,8 @@ class OnlinePaymentController extends Controller
     }
 
     /**
+     * @deprecated Pending payments are no longer stored. Use confirmPayment endpoint instead.
+     * 
      * Admin: Manually verify a payment (from admin panel)
      * 
      * @param Request $request
@@ -434,73 +443,11 @@ class OnlinePaymentController extends Controller
      */
     public function adminVerifyPayment(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'payment_ref' => 'required|string',
-            'verified' => 'required|boolean',
-            'admin_note' => 'nullable|string|max:500',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $payment = OrderPayment::where('transaction_id', $request->payment_ref)->first();
-
-            if (!$payment) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment not found'
-                ], 404);
-            }
-
-            $newStatus = $request->verified ? 'complete' : 'failed';
-
-            $payment->update([
-                'payment_status' => $newStatus,
-                'updated_at' => now(),
-            ]);
-
-            // Update order if verified
-            if ($request->verified) {
-                $order = Order::find($payment->order_id);
-                
-                if ($order) {
-                    $totalPaid = OrderPayment::where('order_id', $order->id)
-                        ->where('payment_status', 'complete')
-                        ->sum('amount');
-
-                    $totalDue = $order->order_amount + 
-                               ($order->total_tax_amount ?? 0) + 
-                               ($order->delivery_charge ?? 0);
-
-                    if ($totalPaid >= $totalDue) {
-                        $order->update(['payment_status' => 'paid']);
-                    } else {
-                        $order->update(['payment_status' => 'partial']);
-                    }
-                }
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => $request->verified ? 'Payment verified successfully' : 'Payment marked as failed',
-                'data' => [
-                    'payment_ref' => $request->payment_ref,
-                    'status' => $newStatus,
-                ]
-            ], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
+        return response()->json([
+            'success' => false,
+            'message' => 'This endpoint is deprecated. Pending payments are no longer stored. Use the confirmPayment endpoint to record verified payments.',
+        ], 410); // 410 Gone
+    }
             Log::error('Error verifying payment: ' . $e->getMessage());
 
             return response()->json([

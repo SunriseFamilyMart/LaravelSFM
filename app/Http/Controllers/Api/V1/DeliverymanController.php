@@ -986,6 +986,11 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
     }
 
 
+    /**
+     * @deprecated This method uses legacy OrderPayment. Use StorePaymentFifoService instead.
+     * 
+     * Store payment for order
+     */
     public function store(Request $request)
     {
         // 1️⃣ Validate input
@@ -1055,6 +1060,11 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'payment_status' => $order->payment_status
         ], 200);
     }
+    /**
+     * @deprecated This method uses legacy OrderPayment. Use StorePaymentFifoService instead.
+     * 
+     * Store flexible payment (multiple payment methods for one order)
+     */
     public function storeFlexiblePayment(Request $request)
     {
         // -------------------- VALIDATION --------------------
@@ -1233,12 +1243,14 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
         // ----------- PAYMENT DETAILS -----------
         $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
-        $paidAmount = OrderPayment::where('order_id', $order->id)
-            ->where('payment_status', 'complete')
-            ->sum('amount');
+        $paidAmount = $order->paid_amount ?? 0;
 
-        $payments = OrderPayment::where('order_id', $order->id)
-            ->orderBy('created_at', 'desc')
+        // Get payments from payment_allocations joined with payment_ledgers
+        $payments = DB::table('payment_allocations as pa')
+            ->join('payment_ledgers as pl', 'pa.payment_ledger_id', '=', 'pl.id')
+            ->where('pa.order_id', $order->id)
+            ->select('pl.*', 'pa.allocated_amount')
+            ->orderBy('pl.created_at', 'desc')
             ->get();
 
         // ----------- RESPONSE -----------

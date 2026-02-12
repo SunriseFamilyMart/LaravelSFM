@@ -284,10 +284,8 @@ public function updateOrder(Request $request, $id)
     );
     }
 
-    // Recalculate total paid
-    $totalPaid = OrderPayment::where('order_id', $order->id)
-        ->where('payment_status', 'complete')
-        ->sum('amount');
+    // Use orders.paid_amount directly
+    $totalPaid = $order->paid_amount ?? 0;
 
     $order->payment_status = $totalPaid >= $orderTotal ? 'Paid' : 'Unpaid';
     $order->save();
@@ -624,16 +622,33 @@ public function storeOrder(Request $request)
                 }
             }
 
-            if ($order['payment_method'] == 'cash_on_delivery') {
-                $partialData = OrderPartialPayment::where(['order_id' => $order->id])->first();
-                if ($partialData) {
-                    $partial = new OrderPartialPayment;
-                    $partial->order_id = $order['id'];
-                    $partial->paid_with = 'cash_on_delivery';
-                    $partial->paid_amount = $partialData->due_amount;
-                    $partial->due_amount = 0;
-                    $partial->save();
-                }
+            // Record COD payment when order is delivered
+            if ($request->order_status == 'delivered' && $order->payment_method == 'cash_on_delivery') {
+                $orderTotal = ($order->order_amount ?? 0) +
+                             ($order->total_tax_amount ?? 0) +
+                             ($order->delivery_charge ?? 0) -
+                             ($order->coupon_discount_amount ?? 0);
+
+                // Create payment ledger and allocation
+                $ledger = PaymentLedger::create([
+                    'store_id'       => $order->store_id,
+                    'order_id'       => $order->id,
+                    'entry_type'     => 'CREDIT',
+                    'amount'         => $orderTotal,
+                    'payment_method' => 'cash_on_delivery',
+                    'remarks'        => 'COD collected on delivery',
+                ]);
+
+                PaymentAllocation::create([
+                    'payment_ledger_id' => $ledger->id,
+                    'order_id'          => $order->id,
+                    'allocated_amount'  => $orderTotal,
+                ]);
+
+                $order->update([
+                    'paid_amount'    => $orderTotal,
+                    'payment_status' => 'paid',
+                ]);
             }
         }
 
