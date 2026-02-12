@@ -29,7 +29,7 @@
 
 @section('content')
     <div class="content container-fluid">
-        <div class="page-header">
+        <div class="page-header d-flex justify-content-between align-items-center">
             <h1 class="mb-0 page-header-title">
                 <span class="page-header-icon">
                     <img src="{{ asset('public/assets/admin/img/all_orders.png') }}" class="w--20" alt="">
@@ -38,6 +38,9 @@
                     {{ translate('Pick Order Items') }} - {{ translate('Order') }} #{{ $order->id }}
                 </span>
             </h1>
+            <a href="{{ route('admin.picking.invoice-pdf', $order->id) }}" class="btn btn-primary">
+                <i class="tio-download"></i> {{ translate('Download Invoice PDF') }}
+            </a>
         </div>
 
         <!-- Order Info Card -->

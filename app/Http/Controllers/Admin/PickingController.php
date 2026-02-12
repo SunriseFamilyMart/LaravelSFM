@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Model\Branch;
+use App\Model\BusinessSetting;
 use App\Model\DeliveryMan;
 use App\Model\Order;
 use App\Model\OrderDetail;
@@ -28,7 +29,8 @@ class PickingController extends Controller
         private OrderDetail $orderDetail,
         private OrderPickingItem $pickingItem,
         private Branch $branch,
-        private DeliveryMan $deliveryMan
+        private DeliveryMan $deliveryMan,
+        private BusinessSetting $businessSetting
     ) {
     }
 
@@ -423,5 +425,67 @@ class PickingController extends Controller
             Toastr::error(translate('Failed to assign delivery man: ') . $e->getMessage());
             return redirect()->back();
         }
+    }
+
+    /**
+     * Generate PDF invoice for a single order
+     *
+     * @param $order_id
+     * @return mixed
+     */
+    public function invoicePdf($order_id)
+    {
+        // Load the order with all necessary relationships
+        $order = $this->order->with([
+            'details.product',
+            'store',
+            'salesPerson',
+            'delivery_man',
+            'branch'
+        ])->find($order_id);
+
+        if (!$order) {
+            Toastr::error(translate('Order not found'));
+            return redirect()->route('admin.picking.index');
+        }
+
+        // Business Info (same as DeliveryTripController)
+        $business_name = 'Sunrise Family Mart';
+        $business_address = 'Bangalore, Karnataka';
+        $business_phone = '9999999999';
+        $business_email = 'admin@sunrisefamilymart.com';
+        $business_gst = '29ABCDE1234F1Z5';
+
+        // Load Logo
+        $logoPath = public_path('logo.png');
+        $business_logo = file_exists($logoPath)
+            ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+            : null;
+
+        // Load Paytm QR Code
+        $qrPath = public_path('qr.jpeg');
+        $paytm_qr_code = file_exists($qrPath)
+            ? 'data:image/png;base64,' . base64_encode(file_get_contents($qrPath))
+            : null;
+
+        // Footer text
+        $footer_text = optional(
+            $this->businessSetting->where('key', 'footer_text')->first()
+        )->value ?? '';
+
+        // Generate PDF
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin-views.order.invoice-body', [
+            'order' => $order,
+            'business_name' => $business_name,
+            'business_address' => $business_address,
+            'business_phone' => $business_phone,
+            'business_email' => $business_email,
+            'business_gst' => $business_gst,
+            'business_logo' => $business_logo,
+            'paytm_qr_code' => $paytm_qr_code,
+            'footer_text' => $footer_text,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('invoice-order-' . $order_id . '.pdf');
     }
 }
