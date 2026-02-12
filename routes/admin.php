@@ -313,6 +313,7 @@ Route::post('orders/update/{id}', [OrderController::class, 'updateOrder'])
             Route::get('/', [PickingController::class, 'index'])->name('index');
             Route::get('/export-pdf', [PickingController::class, 'exportPdf'])->name('export-pdf');
             Route::get('/show/{id}', [PickingController::class, 'show'])->name('show');
+            Route::get('/invoice-pdf/{order_id}', [PickingController::class, 'invoicePdf'])->name('invoice-pdf');
         });
 
         Route::group(['prefix' => 'category', 'as' => 'category.', 'middleware' => ['module:product_management']], function () {
