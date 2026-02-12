@@ -70,7 +70,7 @@ class DeliveryDetailsController extends Controller
         $query = Store::select('stores.*')
             ->selectRaw('COALESCE(SUM(orders.order_amount + orders.total_tax_amount), 0) as total_amount')
             ->selectRaw('COALESCE(SUM(orders.paid_amount), 0) as paid_amount')
-            ->selectRaw('COALESCE(SUM(orders.order_amount + orders.total_tax_amount - orders.paid_amount), 0) as due_amount')
+            ->selectRaw('COALESCE(SUM(orders.order_amount + orders.total_tax_amount), 0) - COALESCE(SUM(orders.paid_amount), 0) as due_amount')
             ->selectRaw('MAX(payment_ledgers.created_at) as last_payment_date')
             ->selectRaw('COUNT(orders.id) as total_orders')
             ->leftJoin('orders', 'stores.id', '=', 'orders.store_id')
@@ -231,7 +231,11 @@ class DeliveryDetailsController extends Controller
             $ledger->remarks = $remarks;
             $ledger->save();
 
-            Toastr::success(translate('UPI transaction ') . translate($action) . translate(' successfully'));
+            $message = $request->action == 'verify' 
+                ? translate('UPI transaction verified successfully')
+                : translate('UPI transaction rejected successfully');
+            
+            Toastr::success($message);
             return redirect()->back();
 
         } catch (\Exception $e) {
