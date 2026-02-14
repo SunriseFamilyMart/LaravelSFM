@@ -6,6 +6,7 @@ use App\Http\Controllers\Branch\DashboardController;
 use App\Http\Controllers\Branch\OrderController;
 use App\Http\Controllers\Branch\POSController;
 use App\Http\Controllers\Branch\SystemController;
+use App\Http\Controllers\Branch\PicklistController;
 
 
 Route::group(['namespace' => 'Branch', 'as' => 'branch.', 'middleware' => 'maintenance_mode'], function () {
@@ -73,6 +74,12 @@ Route::group(['namespace' => 'Branch', 'as' => 'branch.', 'middleware' => 'maint
 
         Route::get('verify-offline-payment/quick-view-details', [OrderController::class, 'offlineQuickViewDetails'])->name('offline-modal-view');
         Route::get('verify-offline-payment/{status}', [OrderController::class, 'offlinePaymentList'])->name('verify-offline-payment');
+
+        Route::group(['prefix' => 'picklist-generator', 'as' => 'picklist.'], function () {
+            Route::get('/', [PicklistController::class, 'index'])->name('index');
+            Route::get('export-pdf', [PicklistController::class, 'exportPdf'])->name('export-pdf');
+            Route::get('export-excel', [PicklistController::class, 'exportExcel'])->name('export-excel');
+        });
 
     });
 });
