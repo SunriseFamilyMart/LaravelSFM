@@ -278,6 +278,17 @@
                                     </li>
                                 </ul>
                             </li>
+
+                            {{-- Delivery Status - New Feature --}}
+                            <li class="navbar-vertical-aside-has-menu {{ Request::is('admin/delivery-status*') ? 'active' : '' }}">
+                                <a class="js-navbar-vertical-aside-menu-link nav-link"
+                                    href="{{ route('admin.delivery-status.index') }}" title="{{ translate('Delivery Status') }}">
+                                    <i class="tio-gift nav-icon"></i>
+                                    <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                        📦 {{ translate('Delivery Status') }}
+                                    </span>
+                                </a>
+                            </li>
                         @endif
 
 
