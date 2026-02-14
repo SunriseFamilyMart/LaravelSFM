@@ -1112,10 +1112,8 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         $order = Order::find($request->order_id);
         $orderTotal = (float) ($order->order_amount + $order->total_tax_amount);
 
-        // Already paid before
-        $alreadyPaid = OrderPayment::where('order_id', $order->id)
-            ->where('payment_status', 'complete')
-            ->sum('amount');
+        // Get already paid amount from order (maintained by FIFO service)
+        $alreadyPaid = (float) ($order->paid_amount ?? 0);
 
 
         // -------------------- PROCESS NEW PAYMENT --------------------
@@ -1153,8 +1151,6 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
 
         // -------------------- SAVE PAYMENTS --------------------
-        $paymentRecords = [];
-
        foreach ($validPayments as $pay) {
             if ($pay['payment_method'] === 'credit_sale') continue;
 
@@ -1168,24 +1164,13 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         }
 
 
-        $totalPaid = $incomingPaid + $alreadyPaid;
-
-
-        // -------------------- AUTO CREATE CREDIT SALE ENTRY --------------------
-        if ($totalPaid < $orderTotal) {
-            $remaining = $orderTotal - $totalPaid;
-
-            $paymentRecords[] = OrderPayment::create([
-                'order_id' => $order->id,
-                'payment_method' => 'credit_sale',
-                'amount' => $remaining,
-                'payment_date' => now()->toDateString(),
-                'payment_status' => 'incomplete',
-            ]);
-        }
+        // Reload order to get updated paid_amount from FIFO service
+        $order->refresh();
+        $totalPaid = (float) ($order->paid_amount ?? 0);
 
 
         // -------------------- UPDATE ORDER PAYMENT STATUS --------------------
+        // Payment status is already updated by FIFO service, but ensure consistency
         if ($totalPaid == 0) {
             $order->payment_status = 'unpaid';
         } elseif ($totalPaid < $orderTotal) {
@@ -1206,7 +1191,6 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             'order_total' => $orderTotal,
             'total_paid' => $totalPaid,
             'due_amount' => max($orderTotal - $totalPaid, 0),
-            'payments' => $paymentRecords
         ], 200);
     }
    
