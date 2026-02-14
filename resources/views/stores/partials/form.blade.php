@@ -41,6 +41,21 @@
             <input type="text" name="landmark" value="{{ old('landmark', $store->landmark ?? '') }}"
                 class="form-control">
         </div>
+
+        {{-- Branch --}}
+        <div class="col-md-6">
+            <label class="form-label fw-bold">Branch</label>
+            <select name="branch" class="form-control">
+                <option value="">Select Branch</option>
+                @foreach(\App\Model\Branch::all() as $branch)
+                    <option value="{{ $branch->name }}" 
+                        {{ old('branch', $store->branch ?? '') == $branch->name ? 'selected' : '' }}>
+                        {{ $branch->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
         <div class="form-group mb-3">
             <label for="gst_number" class="form-label">GST Number</label>
             <input type="text" name="gst_number" id="gst_number" class="form-control"
