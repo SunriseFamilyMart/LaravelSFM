@@ -127,7 +127,7 @@
 
 @php
 $rowspan = $order->details->count();
-$paid = $order->payments->sum('amount');
+$paid = $order->paid_amount ?? 0;
 $balance = $order->order_amount - $paid;
 $first = true;
 @endphp

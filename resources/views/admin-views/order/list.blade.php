@@ -398,8 +398,13 @@
                                     </td>
                                     <td>
     @php
-        $completedPayments = $order->payments
-            ->where('payment_status', 'complete');
+        // Get payment ledgers via allocations for this order
+        $completedPayments = DB::table('payment_allocations as pa')
+            ->join('payment_ledgers as pl', 'pa.payment_ledger_id', '=', 'pl.id')
+            ->where('pa.order_id', $order->id)
+            ->where('pl.entry_type', 'CREDIT')
+            ->select('pl.*', 'pa.allocated_amount')
+            ->get();
     @endphp
 
     @if($completedPayments->isEmpty())
@@ -408,7 +413,7 @@
         <ul class="mb-0">
             @foreach($completedPayments as $payment)
                 <li>
-                    {{ ucfirst($payment->payment_method) }}: ₹{{ number_format($payment->amount, 2) }}
+                    {{ ucfirst($payment->payment_method) }}: ₹{{ number_format($payment->allocated_amount, 2) }}
                     
                 </li>
             @endforeach
