@@ -714,6 +714,18 @@
                                     </li>
                                 </ul>
                             </li>
+
+                            <li
+                                class="navbar-vertical-aside-has-menu {{ Request::is('admin/picklist-generator*') ? 'active' : '' }}">
+                                <a class="js-navbar-vertical-aside-menu-link nav-link"
+                                    href="{{ route('admin.picklist-generator.index') }}"
+                                    title="{{ translate('Picklist Generator') }}">
+                                    <i class="tio-receipt-outlined nav-icon"></i>
+                                    <span class="navbar-vertical-aside-mini-mode-hidden-elements text-truncate">
+                                        {{ translate('Picklist Generator') }}
+                                    </span>
+                                </a>
+                            </li>
                             </li>
                         @endif
 

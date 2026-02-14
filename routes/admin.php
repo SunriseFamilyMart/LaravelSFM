@@ -48,6 +48,7 @@ use App\Http\Controllers\Admin\RolesAccessController;
 use App\Http\Controllers\Admin\PickingController;
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\PurchaseManagementController;
+use App\Http\Controllers\Admin\PicklistGeneratorController;
 
 
 
@@ -144,6 +145,12 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
             Route::get('monthly-report', [AttendanceController::class, 'monthlyReport'])->name('monthly-report');
             Route::get('export-excel', [AttendanceController::class, 'exportExcel'])->name('export-excel');
             Route::get('export-pdf', [AttendanceController::class, 'exportPdf'])->name('export-pdf');
+        });
+
+        Route::group(['prefix' => 'picklist-generator', 'as' => 'picklist-generator.'], function () {
+            Route::get('/', [PicklistGeneratorController::class, 'index'])->name('index');
+            Route::get('export-pdf', [PicklistGeneratorController::class, 'exportPdf'])->name('export-pdf');
+            Route::get('export-excel', [PicklistGeneratorController::class, 'exportExcel'])->name('export-excel');
         });
         Route::group(['prefix' => 'pos', 'as' => 'pos.', 'middleware' => ['module:pos_management']], function () {
             Route::get('/', [POSController::class, 'index'])->name('index');
