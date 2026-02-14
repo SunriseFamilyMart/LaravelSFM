@@ -299,6 +299,12 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
             Route::get('/supplier-products/{supplierId}', [OrderController::class, 'getSupplierProducts'])->name('supplier.products');
         });
 
+        // Delivery Status Routes
+        Route::group(['prefix' => 'delivery-status', 'as' => 'delivery-status.', 'middleware' => ['module:order_management']], function () {
+            Route::get('/', [OrderController::class, 'deliveryStatus'])->name('index');
+            Route::post('mark-collected/{order_id}', [OrderController::class, 'markAsCollected'])->name('mark-collected');
+        });
+
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
         //     Route::get('list', [OrderController::class, 'list'])->name('list');
         //     Route::get('details/{id}', [OrderController::class, 'details'])->name('details');

@@ -1284,4 +1284,102 @@ public function storeOrder(Request $request)
     }
 }
 
+    /**
+     * Delivery Status Page
+     * Shows delivered orders with UPI payment tracking
+     * 
+     * @param Request $request
+     * @return View|Factory|Application
+     */
+    public function deliveryStatus(Request $request): View|Factory|Application
+    {
+        $search = $request['search'] ?? null;
+        $branchId = $request['branch_id'] ?? 'all';
+        
+        $branches = $this->branch->all();
+
+        // Build query for delivered orders
+        $query = $this->order
+            ->where('order_status', 'delivered')
+            ->with(['customer', 'delivery_man', 'time_slot', 'branch', 'store']);
+
+        // Branch filter
+        if ($branchId && $branchId != 'all') {
+            $query->where('branch_id', $branchId);
+        }
+
+        // Search filter
+        if ($search) {
+            $key = explode(' ', $search);
+            $query->where(function ($q) use ($key) {
+                foreach ($key as $value) {
+                    $q->orWhere('id', 'like', "%{$value}%");
+                }
+            });
+        }
+
+        // Get orders with pagination
+        $orders = $query->orderBy('delivery_date', 'desc')
+            ->paginate(15)
+            ->appends(['search' => $search, 'branch_id' => $branchId]);
+
+        // Get UPI payment data for each order
+        foreach ($orders as $order) {
+            // Get UPI payment from payment_ledgers via store_id
+            $upiPayment = PaymentLedger::where('store_id', $order->store_id)
+                ->where('order_id', $order->id)
+                ->where('payment_method', 'upi')
+                ->where('entry_type', 'CREDIT')
+                ->first();
+            
+            $order->upi_payment = $upiPayment;
+        }
+
+        return view('admin-views.order.delivery-status', compact('orders', 'branches', 'search', 'branchId'));
+    }
+
+    /**
+     * Mark order as collected
+     * 
+     * @param Request $request
+     * @param int $orderId
+     * @return JsonResponse
+     */
+    public function markAsCollected(Request $request, $orderId): JsonResponse
+    {
+        try {
+            $order = $this->order->find($orderId);
+
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => translate('Order not found')
+                ], 404);
+            }
+
+            // Check if already collected
+            if ($order->is_collected) {
+                return response()->json([
+                    'success' => false,
+                    'message' => translate('Order already marked as collected')
+                ], 400);
+            }
+
+            // Update is_collected flag
+            $order->is_collected = true;
+            $order->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => translate('Order marked as collected successfully')
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => translate('An error occurred: ') . $e->getMessage()
+            ], 500);
+        }
+    }
+
 }

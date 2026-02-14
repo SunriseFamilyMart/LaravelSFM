@@ -30,6 +30,7 @@ class Order extends Model
         'total_tax_amount',
         'payment_method',
         'checked',
+        'is_collected',
         'delivery_charge',
         'order_type',
         'branch_id',
@@ -44,6 +45,7 @@ class Order extends Model
     protected $casts = [
         'order_amount' => 'float',
         'checked' => 'integer',
+        'is_collected' => 'boolean',
         'branch_id' => 'integer',
         'time_slot_id' => 'integer',
         'coupon_discount_amount' => 'float',
