@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\DeliveryTrip;
 use App\Model\OrderDetail;
 use App\Model\OrderEditLog;
+use App\Models\OrderPayment; // Legacy - only for deprecated store() method
 
 class DeliverymanController extends Controller
 {
