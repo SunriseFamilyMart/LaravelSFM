@@ -82,6 +82,7 @@ class Kernel extends HttpKernel
         'guest_user' => \App\Http\Middleware\GuestUser::class,
         'maintenance_mode' => \App\Http\Middleware\MaintenanceModeMiddleware::class,
         'inventory.auth' => \App\Http\Middleware\InventoryAuth::class,
+        'store.auth' => \App\Http\Middleware\StoreAuthToken::class,
 
     ];
 }
