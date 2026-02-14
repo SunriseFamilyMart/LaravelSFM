@@ -1165,6 +1165,9 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
 
         // Reload order to get updated paid_amount from FIFO service
+        // Note: StorePaymentFifoService::apply() is called in the loop above and commits
+        // the transaction, which updates the order's paid_amount column. The refresh()
+        // ensures we have the latest value before calculating payment_status.
         $order->refresh();
         $totalPaid = (float) ($order->paid_amount ?? 0);
 

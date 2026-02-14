@@ -79,7 +79,13 @@
                                                 <p class="mb-1">
                                                     {{ ucfirst($payment->payment_method) }} —
                                                     ₹{{ number_format($payment->allocated_amount, 2) }}
-                                                    ({{ $payment->entry_type === 'CREDIT' ? 'Complete' : 'Refund' }})
+                                                    @if($payment->entry_type === 'CREDIT')
+                                                        (Received)
+                                                    @elseif($payment->entry_type === 'DEBIT')
+                                                        (Refund/Adjustment)
+                                                    @else
+                                                        ({{ $payment->entry_type }})
+                                                    @endif
                                                 </p>
                                             @endforeach
                                         </div>

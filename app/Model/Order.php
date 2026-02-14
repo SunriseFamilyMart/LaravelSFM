@@ -208,10 +208,22 @@ public function creditNotes()
 
     /**
      * Get the outstanding balance (arrear) for this order
+     * Uses the cached paid_amount maintained by FIFO service
      * 
      * @return float
      */
     public function getArrearAttribute()
+    {
+        return $this->calculateArrear();
+    }
+
+    /**
+     * Calculate the arrear/due amount for this order
+     * Total order amount minus paid amount
+     * 
+     * @return float
+     */
+    public function calculateArrear()
     {
         $total = $this->order_amount + ($this->total_tax_amount ?? 0);
         $paid = $this->paid_amount ?? 0;
