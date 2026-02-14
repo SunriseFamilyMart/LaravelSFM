@@ -388,7 +388,7 @@ class POSController extends Controller
 
         $this->order->where(['checked' => 0])->update(['checked' => 1]);
 
-        $query = $this->order->pos()->with(['customer', 'branch', 'details'])
+        $query = $this->order->pos()->with(['customer', 'branch', 'details', 'store'])
             ->when((!is_null($branchId) && $branchId != 'all'), function ($query) use ($branchId) {
                 return $query->where('branch_id', $branchId);
             })

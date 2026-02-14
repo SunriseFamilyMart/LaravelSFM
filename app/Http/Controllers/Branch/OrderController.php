@@ -62,14 +62,14 @@ class OrderController extends Controller
         $this->order->where(['checked' => 0, 'branch_id' => auth('branch')->id()])->update(['checked' => 1]);
 
         if ($status != 'all') {
-            $orders = $this->order->with(['customer'])->where(['order_status' => $status, 'branch_id' => auth('branch')->id()])
+            $orders = $this->order->with(['customer', 'store'])->where(['order_status' => $status, 'branch_id' => auth('branch')->id()])
                 ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
                     return $query->whereDate('created_at', '>=', $startDate)
                         ->whereDate('created_at', '<=', $endDate);
                 });
 
         } else {
-            $orders = $this->order->with(['customer'])->where(['branch_id' => auth('branch')->id()])
+            $orders = $this->order->with(['customer', 'store'])->where(['branch_id' => auth('branch')->id()])
                 ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
                     return $query->whereDate('created_at', '>=', $startDate)
                         ->whereDate('created_at', '<=', $endDate);
@@ -730,7 +730,7 @@ class OrderController extends Controller
 
         $status = $statusMapping[$status];
 
-        $orders = $this->order->with(['offline_payment'])
+        $orders = $this->order->with(['offline_payment', 'customer', 'store'])
             ->where(['branch_id' => auth('branch')->id()])
             ->where(['payment_method' => 'offline_payment'])
             ->whereHas('offline_payment', function ($query) use($status){
