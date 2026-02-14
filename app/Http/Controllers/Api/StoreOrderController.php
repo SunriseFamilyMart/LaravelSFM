@@ -8,6 +8,7 @@ use App\Model\OrderDetail;
 use App\Model\Product;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -77,6 +78,37 @@ public function index(Request $request)
                 'success' => false,
                 'message' => $validator->errors()->first(),
             ], 422);
+        }
+
+        // ============ CREDIT LIMIT CHECK ============
+        $creditLimit = $store->credit_limit ?? 0;
+
+        if ($creditLimit > 0) {
+            $outstanding = $store->getOutstandingBalance();
+
+            // Calculate order total from cart items first
+            $orderTotal = 0;
+            foreach ($request->order_details as $item) {
+                $product = Product::find($item['product_id']);
+                if ($product) {
+                    $orderTotal += ($product->price * $item['quantity']);
+                }
+            }
+
+            if (($outstanding + $orderTotal) > $creditLimit) {
+                return response()->json([
+                    'success' => false,
+                    'error_type' => 'credit_limit_exceeded',
+                    'message' => 'Credit limit exceeded. Please clear pending payments or use UPI.',
+                    'credit_details' => [
+                        'credit_limit' => round($creditLimit, 2),
+                        'outstanding' => round($outstanding, 2),
+                        'order_amount' => round($orderTotal, 2),
+                        'available' => round(max($creditLimit - $outstanding, 0), 2),
+                        'exceeded_by' => round(max(($outstanding + $orderTotal) - $creditLimit, 0), 2),
+                    ],
+                ], 403);
+            }
         }
 
         // Create Order linked to store and assigned salesperson

@@ -132,7 +132,17 @@ class OrderController extends Controller
 
         if (($outstanding + $request->order_amount) > $creditLimit) {
             return response()->json([
-                'errors' => [['message' => 'Credit limit exceeded']]
+                'success' => false,
+                'error_type' => 'credit_limit_exceeded',
+                'message' => 'Credit limit exceeded. Please clear pending payments or use UPI.',
+                'errors' => [['message' => 'Credit limit exceeded']],
+                'credit_details' => [
+                    'credit_limit' => round($creditLimit, 2),
+                    'outstanding' => round((float)$outstanding, 2),
+                    'order_amount' => round((float)$request->order_amount, 2),
+                    'available' => round(max($creditLimit - (float)$outstanding, 0), 2),
+                    'exceeded_by' => round(max(((float)$outstanding + (float)$request->order_amount) - $creditLimit, 0), 2),
+                ],
             ], 403);
         }
     }

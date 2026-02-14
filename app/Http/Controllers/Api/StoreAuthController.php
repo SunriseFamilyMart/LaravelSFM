@@ -443,6 +443,33 @@ class StoreAuthController extends Controller
     }
 
     /**
+     * GET /api/v1/store/credit-status
+     * Returns current credit limit status for authenticated store.
+     */
+    public function creditStatus(Request $request)
+    {
+        $store = $request->attributes->get('auth_store');
+
+        $creditLimit = $store->credit_limit ?? 0;
+        $outstanding = $store->getOutstandingBalance();
+
+        $available = max($creditLimit - $outstanding, 0);
+        $utilizationPercent = $creditLimit > 0 ? round(($outstanding / $creditLimit) * 100, 1) : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'credit_limit' => round((float)$creditLimit, 2),
+                'outstanding' => round((float)$outstanding, 2),
+                'available' => round($available, 2),
+                'utilization_percent' => $utilizationPercent,
+                'is_exceeded' => $outstanding > $creditLimit,
+                'warning' => $utilizationPercent >= 80,
+            ],
+        ], 200);
+    }
+
+    /**
      * GET /api/v1/store/payment-statement
      * Returns FIFO payment breakdown per order (passbook-style).
      */
