@@ -7,6 +7,12 @@ use App\Models\Store;
 use App\Models\StoreOtp;
 use App\Models\SalesPerson;
 use App\Models\Order;
+use App\Models\PaymentLedger;
+use App\Models\PaymentAllocation;
+use App\Models\OrderPayment;
+use App\Models\OrderPickingItem;
+use App\Model\OrderDetail;
+use App\Model\Product;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -433,6 +439,276 @@ class StoreAuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Password changed successfully.',
+        ], 200);
+    }
+
+    /**
+     * GET /api/v1/store/payment-statement
+     * Returns FIFO payment breakdown per order (passbook-style).
+     */
+    public function paymentStatement(Request $request)
+    {
+        /** @var \App\Models\Store|null $store */
+        $store = $request->attributes->get('auth_store');
+
+        if (!$store) {
+            $token = $request->header('Authorization') ?: $request->header('X-Store-Token');
+            if (!$token) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized. Missing token.'], 401);
+            }
+            $token = trim(str_replace('Bearer ', '', $token));
+            $store = Store::where('auth_token', $token)->first();
+            if (!$store) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized. Invalid token.'], 401);
+            }
+        }
+
+        // Fetch all orders for this store (exclude cancelled, failed, returned)
+        // ordered by created_at ASC for FIFO display
+        $orders = Order::where('store_id', $store->id)
+            ->whereNotIn('order_status', ['cancelled', 'failed', 'returned'])
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $totalOrderAmount = 0;
+        $totalPaidAmount = 0;
+        $totalDueAmount = 0;
+        $paidOrdersCount = 0;
+        $partialOrdersCount = 0;
+        $unpaidOrdersCount = 0;
+
+        $ordersData = [];
+
+        foreach ($orders as $order) {
+            $orderAmount = $order->order_amount ?? 0;
+            $paidAmount = $order->paid_amount ?? 0;
+            $dueAmount = max($orderAmount - $paidAmount, 0);
+
+            $totalOrderAmount += $orderAmount;
+            $totalPaidAmount += $paidAmount;
+            $totalDueAmount += $dueAmount;
+
+            // Count payment status
+            if ($order->payment_status === 'paid' || $dueAmount <= 0.01) {
+                $paidOrdersCount++;
+            } elseif ($paidAmount > 0.01) {
+                $partialOrdersCount++;
+            } else {
+                $unpaidOrdersCount++;
+            }
+
+            // Get payments for this order from both sources
+            $payments = [];
+
+            // Source 1: Payment allocations (FIFO trail)
+            $allocations = PaymentAllocation::where('order_id', $order->id)
+                ->with('paymentLedger')
+                ->get();
+
+            foreach ($allocations as $allocation) {
+                if ($allocation->paymentLedger) {
+                    $payments[] = [
+                        'amount' => round($allocation->allocated_amount ?? 0, 2),
+                        'payment_method' => $allocation->paymentLedger->payment_method ?? 'unknown',
+                        'date' => $allocation->paymentLedger->created_at?->format('Y-m-d') ?? null,
+                        'transaction_ref' => $allocation->paymentLedger->transaction_ref ?? null,
+                    ];
+                }
+            }
+
+            // Source 2: Order payments (fallback for older data)
+            // Only include if not already covered by allocations
+            if (empty($payments)) {
+                $orderPayments = OrderPayment::where('order_id', $order->id)
+                    ->where('payment_status', 'complete')
+                    ->get();
+
+                foreach ($orderPayments as $payment) {
+                    $payments[] = [
+                        'amount' => round($payment->amount ?? 0, 2),
+                        'payment_method' => $payment->payment_method ?? 'unknown',
+                        'date' => $payment->payment_date ?? $payment->created_at?->format('Y-m-d') ?? null,
+                        'transaction_ref' => $payment->transaction_id ?? null,
+                    ];
+                }
+            }
+
+            $ordersData[] = [
+                'order_id' => $order->id,
+                'order_date' => $order->created_at?->format('Y-m-d') ?? null,
+                'order_amount' => round($orderAmount, 2),
+                'paid_amount' => round($paidAmount, 2),
+                'due_amount' => round($dueAmount, 2),
+                'payment_status' => $order->payment_status ?? 'unpaid',
+                'order_status' => $order->order_status ?? 'pending',
+                'payments' => $payments,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary' => [
+                    'total_order_amount' => round($totalOrderAmount, 2),
+                    'total_paid_amount' => round($totalPaidAmount, 2),
+                    'total_due_amount' => round($totalDueAmount, 2),
+                    'total_orders' => count($orders),
+                    'paid_orders' => $paidOrdersCount,
+                    'partial_orders' => $partialOrdersCount,
+                    'unpaid_orders' => $unpaidOrdersCount,
+                ],
+                'orders' => $ordersData,
+            ],
+        ], 200);
+    }
+
+    /**
+     * GET /api/v1/store/orders/{order_id}
+     * Returns order detail with picking changes.
+     */
+    public function orderDetail(Request $request, $orderId)
+    {
+        /** @var \App\Models\Store|null $store */
+        $store = $request->attributes->get('auth_store');
+
+        if (!$store) {
+            $token = $request->header('Authorization') ?: $request->header('X-Store-Token');
+            if (!$token) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized. Missing token.'], 401);
+            }
+            $token = trim(str_replace('Bearer ', '', $token));
+            $store = Store::where('auth_token', $token)->first();
+            if (!$store) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized. Invalid token.'], 401);
+            }
+        }
+
+        // Find order and verify it belongs to this store
+        $order = Order::where('id', $orderId)
+            ->where('store_id', $store->id)
+            ->first();
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order not found or does not belong to this store.',
+            ], 404);
+        }
+
+        // Load order details with product information
+        $orderDetails = OrderDetail::where('order_id', $order->id)
+            ->with('product')
+            ->get();
+
+        // Load picking items for this order
+        $pickingItems = OrderPickingItem::where('order_id', $order->id)
+            ->get()
+            ->keyBy('order_detail_id'); // Key by order_detail_id for easy lookup
+
+        $items = [];
+        $originalAmount = 0;
+        $hasPickingChanges = false;
+
+        foreach ($orderDetails as $detail) {
+            $pickingItem = $pickingItems->get($detail->id);
+
+            $orderedQty = $detail->quantity ?? 0;
+            $unitPrice = $detail->price ?? 0;
+
+            if ($pickingItem) {
+                // Picking data exists
+                $pickedQty = $pickingItem->picked_qty ?? 0;
+                $missingQty = $pickingItem->missing_qty ?? 0;
+                $missingReason = $pickingItem->missing_reason;
+                $pickingStatus = $pickingItem->status ?? 'pending';
+            } else {
+                // No picking data yet - assume all items picked
+                $pickedQty = $orderedQty;
+                $missingQty = 0;
+                $missingReason = null;
+                $pickingStatus = 'pending';
+            }
+
+            $originalTotal = $orderedQty * $unitPrice;
+            $finalTotal = $pickedQty * $unitPrice;
+            $adjustment = $finalTotal - $originalTotal;
+
+            $originalAmount += $originalTotal;
+
+            if ($missingQty > 0) {
+                $hasPickingChanges = true;
+            }
+
+            $product = $detail->product;
+
+            $items[] = [
+                'product_id' => $detail->product_id,
+                'product_name' => $product->name ?? 'Unknown Product',
+                'product_image' => $product->image ?? null,
+                'ordered_qty' => $orderedQty,
+                'picked_qty' => $pickedQty,
+                'missing_qty' => $missingQty,
+                'missing_reason' => $missingReason,
+                'picking_status' => $pickingStatus,
+                'unit_price' => round($unitPrice, 2),
+                'original_total' => round($originalTotal, 2),
+                'final_total' => round($finalTotal, 2),
+                'adjustment' => round($adjustment, 2),
+            ];
+        }
+
+        $finalAmount = $order->order_amount ?? 0;
+        $pickingAdjustment = $finalAmount - $originalAmount;
+
+        // Get payments for this order
+        $payments = [];
+
+        // Source 1: Payment allocations (FIFO trail)
+        $allocations = PaymentAllocation::where('order_id', $order->id)
+            ->with('paymentLedger')
+            ->get();
+
+        foreach ($allocations as $allocation) {
+            if ($allocation->paymentLedger) {
+                $payments[] = [
+                    'amount' => round($allocation->allocated_amount ?? 0, 2),
+                    'payment_method' => $allocation->paymentLedger->payment_method ?? 'unknown',
+                    'date' => $allocation->paymentLedger->created_at?->format('Y-m-d') ?? null,
+                    'transaction_ref' => $allocation->paymentLedger->transaction_ref ?? null,
+                ];
+            }
+        }
+
+        // Source 2: Order payments (fallback)
+        if (empty($payments)) {
+            $orderPayments = OrderPayment::where('order_id', $order->id)
+                ->where('payment_status', 'complete')
+                ->get();
+
+            foreach ($orderPayments as $payment) {
+                $payments[] = [
+                    'amount' => round($payment->amount ?? 0, 2),
+                    'payment_method' => $payment->payment_method ?? 'unknown',
+                    'date' => $payment->payment_date ?? $payment->created_at?->format('Y-m-d') ?? null,
+                    'transaction_ref' => $payment->transaction_id ?? null,
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'order_id' => $order->id,
+                'order_date' => $order->created_at?->format('Y-m-d') ?? null,
+                'order_status' => $order->order_status ?? 'pending',
+                'payment_status' => $order->payment_status ?? 'unpaid',
+                'original_amount' => round($originalAmount, 2),
+                'final_amount' => round($finalAmount, 2),
+                'picking_adjustment' => round($pickingAdjustment, 2),
+                'has_picking_changes' => $hasPickingChanges,
+                'items' => $items,
+                'payments' => $payments,
+            ],
         ], 200);
     }
 }
