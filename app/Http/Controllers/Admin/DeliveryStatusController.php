@@ -38,7 +38,7 @@ class DeliveryStatusController extends Controller
             ->when($branchId && $branchId != 'all', fn($q) => $q->where('branch_id', $branchId))
             ->when($deliveryManId && $deliveryManId != 'all', fn($q) => $q->where('delivery_man_id', $deliveryManId))
             ->when($startDate && $endDate, fn($q) => $q->whereDate('created_at', '>=', $startDate)->whereDate('created_at', '<=', $endDate))
-            ->when($route && $route != 'all', fn($q) => $q->whereHas('branch', fn($b) => $b->where('route_name', $route)))
+            ->when($route && $route != 'all', fn($q) => $q->whereHas('store', fn($s) => $s->where('route_name', $route)))
             ->when($paymentStatus && $paymentStatus != 'all', fn($q) => $q->where('payment_status', $paymentStatus))
             ->when($collectionStatus && $collectionStatus != 'all', function($q) use($collectionStatus) {
                 if($collectionStatus == 'collected') {
@@ -77,7 +77,7 @@ class DeliveryStatusController extends Controller
             ->when($branchId && $branchId != 'all', fn($q) => $q->where('orders.branch_id', $branchId))
             ->when($deliveryManId && $deliveryManId != 'all', fn($q) => $q->where('orders.delivery_man_id', $deliveryManId))
             ->when($startDate && $endDate, fn($q) => $q->whereDate('orders.created_at', '>=', $startDate)->whereDate('orders.created_at', '<=', $endDate))
-            ->when($route && $route != 'all', fn($q) => $q->whereHas('branch', fn($b) => $b->where('route_name', $route)))
+            ->when($route && $route != 'all', fn($q) => $q->whereHas('store', fn($s) => $s->where('route_name', $route)))
             ->when($paymentStatus && $paymentStatus != 'all', fn($q) => $q->where('orders.payment_status', $paymentStatus))
             ->when($collectionStatus && $collectionStatus != 'all', function($q) use($collectionStatus) {
                 if($collectionStatus == 'collected') {
