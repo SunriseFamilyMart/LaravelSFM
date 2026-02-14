@@ -69,6 +69,7 @@ class SalesPersonController extends Controller
             'address' => 'nullable|string',
             'emergency_contact_name' => 'nullable|string',
             'emergency_contact_number' => 'nullable|string',
+            'branch' => 'nullable|string',
         ]);
 
         $data = $request->all();
@@ -106,6 +107,7 @@ class SalesPersonController extends Controller
             'address' => 'nullable|string',
             'emergency_contact_name' => 'nullable|string',
             'emergency_contact_number' => 'nullable|string',
+            'branch' => 'nullable|string',
         ]);
 
         $data = $request->all();

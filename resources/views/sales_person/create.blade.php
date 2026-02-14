@@ -68,6 +68,19 @@
                             <label class="form-label">{{ translate('Person Photo') }}</label>
                             <input type="file" name="person_photo" class="form-control">
                         </div>
+
+                        <!-- Branch -->
+                        <div class="col-md-6">
+                            <label class="form-label">{{ translate('Branch') }}</label>
+                            <select name="branch" class="form-control">
+                                <option value="">{{ translate('Select Branch') }}</option>
+                                @foreach(\App\Model\Branch::all() as $branch)
+                                    <option value="{{ $branch->name }}" {{ old('branch') == $branch->name ? 'selected' : '' }}>
+                                        {{ $branch->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
                     <div class="col-md-12">
                         <label class="form-label">{{ translate('Password') }}</label>

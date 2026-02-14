@@ -21,6 +21,7 @@ class SalesPerson extends Model
         'emergency_contact_number',
         'auth_token',
         'password',
+        'branch',
     ];
 
     public function customers()

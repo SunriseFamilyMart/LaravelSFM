@@ -16,6 +16,8 @@ use App\Model\SearchedKeywordCount;
 use App\Model\SearchedKeywordUser;
 use App\Model\SearchedProduct;
 use App\Model\Translation;
+use App\Models\SalesPerson;
+use App\Models\Store;
 use App\VisitedProduct;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,7 +49,7 @@ class ProductController extends Controller
 {
   
     $validator = Validator::make($request->all(), [
-        'store_id' => 'required|exists:stores,id',
+        'store_id' => 'nullable|exists:stores,id',
         'sort_by'  => 'nullable|in:latest,popular,recommended,trending',
         'limit'    => 'nullable|integer|min:1',
         'offset'   => 'nullable|integer|min:1',
@@ -57,9 +59,38 @@ class ProductController extends Controller
         return response()->json(['errors' => Helpers::error_processor($validator)], 403);
     }
 
-    // 🔑 Single source of truth
-    $store = Store::findOrFail($request->store_id);
-    $branch = $store->branch_id; // STRING, matches inventory_transactions.branch
+    // Get token from Authorization header
+    $token = $request->header('Authorization');
+    if ($token) {
+        $token = str_replace('Bearer ', '', $token);
+        $token = trim($token);
+    }
+
+    $branch = null;
+
+    // Check 1: Is it a Salesman?
+    if ($token) {
+        $salesPerson = SalesPerson::where('auth_token', $token)->first();
+        if ($salesPerson) {
+            $branch = $salesPerson->branch;
+        }
+    }
+
+    // Check 2: Is it a Store Owner?
+    if (!$branch && $token) {
+        $store = Store::where('auth_token', $token)->first();
+        if ($store) {
+            $branch = $store->branch;
+        }
+    }
+
+    // Check 3: Fallback — if store_id is passed (existing behavior)
+    if (!$branch && $request->has('store_id')) {
+        $store = Store::find($request->store_id);
+        if ($store) {
+            $branch = $store->branch;
+        }
+    }
 
     $sortBy = $request->sort_by ?? 'latest';
 

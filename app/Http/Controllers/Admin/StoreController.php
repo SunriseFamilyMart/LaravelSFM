@@ -53,9 +53,11 @@ class StoreController extends Controller
     {
         $request->validate([
             'sales_person_id' => 'required|exists:sales_people,id',
+            'branch' => 'required|string',
         ]);
 
         $store->sales_person_id = (int) $request->sales_person_id;
+        $store->branch = $request->branch;
         $store->approval_status = 'approved';
         $store->can_login = true;
         $store->approved_by = auth('admin')->id();
