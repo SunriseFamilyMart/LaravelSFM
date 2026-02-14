@@ -27,32 +27,19 @@ class PicklistController extends Controller
     ) {}
 
     /**
-     * Display the picklist generator with filters
+     * Build the picklist query with filters
      *
      * @param Request $request
-     * @return Factory|View|Application
+     * @return \Illuminate\Database\Eloquent\Builder
      */
-    public function index(Request $request): View|Factory|Application
+    private function buildPicklistQuery(Request $request)
     {
-        // Get filter parameters
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
         $storeId = $request->input('store_id');
         $routeName = $request->input('route_name');
         $pickingStatus = $request->input('picking_status');
 
-        // Get all stores for filter dropdown
-        $stores = $this->store->orderBy('store_name')->get();
-        
-        // Get unique routes for filter dropdown
-        $routes = $this->store->whereNotNull('route_name')
-            ->distinct()
-            ->pluck('route_name')
-            ->filter()
-            ->sort()
-            ->values();
-
-        // Build query for picklist data
         $query = $this->orderDetail
             ->select(
                 'order_details.product_id',
@@ -108,8 +95,37 @@ class PicklistController extends Controller
             }
         }
 
-        // Group by product and route
-        $picklistData = $query
+        return $query;
+    }
+
+    /**
+     * Display the picklist generator with filters
+     *
+     * @param Request $request
+     * @return Factory|View|Application
+     */
+    public function index(Request $request): View|Factory|Application
+    {
+        // Get filter parameters for view
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $storeId = $request->input('store_id');
+        $routeName = $request->input('route_name');
+        $pickingStatus = $request->input('picking_status');
+
+        // Get all stores for filter dropdown
+        $stores = $this->store->orderBy('store_name')->get();
+        
+        // Get unique routes for filter dropdown
+        $routes = $this->store->whereNotNull('route_name')
+            ->distinct()
+            ->pluck('route_name')
+            ->filter()
+            ->sort()
+            ->values();
+
+        // Build and execute query
+        $picklistData = $this->buildPicklistQuery($request)
             ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name', 'stores.store_name')
             ->orderBy('stores.route_name')
             ->orderBy('products.name')
@@ -144,68 +160,15 @@ class PicklistController extends Controller
      */
     public function exportPdf(Request $request)
     {
-        // Get filter parameters
+        // Get filter parameters for display
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
         $storeId = $request->input('store_id');
         $routeName = $request->input('route_name');
         $pickingStatus = $request->input('picking_status');
 
-        // Build query for picklist data
-        $query = $this->orderDetail
-            ->select(
-                'order_details.product_id',
-                'products.name',
-                'products.weight',
-                'stores.route_name',
-                'stores.store_name',
-                DB::raw('SUM(order_details.quantity) as total_quantity'),
-                DB::raw('SUM(order_details.quantity * products.weight) as total_weight')
-            )
-            ->join('orders', 'order_details.order_id', '=', 'orders.id')
-            ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->leftJoin('stores', 'orders.store_id', '=', 'stores.id')
-            ->where('orders.branch_id', auth('branch')->id());
-
-        // Apply filters (same as index)
-        if ($startDate && $endDate) {
-            $query->whereBetween('orders.date', [$startDate, $endDate]);
-        } elseif ($startDate) {
-            $query->where('orders.date', '>=', $startDate);
-        } elseif ($endDate) {
-            $query->where('orders.date', '<=', $endDate);
-        }
-
-        if ($storeId) {
-            $query->where('orders.store_id', $storeId);
-        }
-
-        if ($routeName) {
-            $query->where('stores.route_name', $routeName);
-        }
-
-        if ($pickingStatus) {
-            if ($pickingStatus === 'picked') {
-                $query->whereExists(function ($subQuery) {
-                    $subQuery->select(DB::raw(1))
-                        ->from('order_picking_items')
-                        ->whereColumn('order_picking_items.order_id', 'orders.id')
-                        ->whereColumn('order_picking_items.order_detail_id', 'order_details.id')
-                        ->where('order_picking_items.status', 'picked');
-                });
-            } elseif ($pickingStatus === 'non_picked') {
-                $query->whereNotExists(function ($subQuery) {
-                    $subQuery->select(DB::raw(1))
-                        ->from('order_picking_items')
-                        ->whereColumn('order_picking_items.order_id', 'orders.id')
-                        ->whereColumn('order_picking_items.order_detail_id', 'order_details.id')
-                        ->where('order_picking_items.status', 'picked');
-                });
-            }
-        }
-
-        // Group by product and route
-        $picklistData = $query
+        // Build and execute query
+        $picklistData = $this->buildPicklistQuery($request)
             ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name', 'stores.store_name')
             ->orderBy('stores.route_name')
             ->orderBy('products.name')
@@ -240,68 +203,8 @@ class PicklistController extends Controller
      */
     public function exportExcel(Request $request): StreamedResponse
     {
-        // Get filter parameters
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
-        $storeId = $request->input('store_id');
-        $routeName = $request->input('route_name');
-        $pickingStatus = $request->input('picking_status');
-
-        // Build query for picklist data
-        $query = $this->orderDetail
-            ->select(
-                'order_details.product_id',
-                'products.name',
-                'products.weight',
-                'stores.route_name',
-                'stores.store_name',
-                DB::raw('SUM(order_details.quantity) as total_quantity'),
-                DB::raw('SUM(order_details.quantity * products.weight) as total_weight')
-            )
-            ->join('orders', 'order_details.order_id', '=', 'orders.id')
-            ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->leftJoin('stores', 'orders.store_id', '=', 'stores.id')
-            ->where('orders.branch_id', auth('branch')->id());
-
-        // Apply filters (same as index)
-        if ($startDate && $endDate) {
-            $query->whereBetween('orders.date', [$startDate, $endDate]);
-        } elseif ($startDate) {
-            $query->where('orders.date', '>=', $startDate);
-        } elseif ($endDate) {
-            $query->where('orders.date', '<=', $endDate);
-        }
-
-        if ($storeId) {
-            $query->where('orders.store_id', $storeId);
-        }
-
-        if ($routeName) {
-            $query->where('stores.route_name', $routeName);
-        }
-
-        if ($pickingStatus) {
-            if ($pickingStatus === 'picked') {
-                $query->whereExists(function ($subQuery) {
-                    $subQuery->select(DB::raw(1))
-                        ->from('order_picking_items')
-                        ->whereColumn('order_picking_items.order_id', 'orders.id')
-                        ->whereColumn('order_picking_items.order_detail_id', 'order_details.id')
-                        ->where('order_picking_items.status', 'picked');
-                });
-            } elseif ($pickingStatus === 'non_picked') {
-                $query->whereNotExists(function ($subQuery) {
-                    $subQuery->select(DB::raw(1))
-                        ->from('order_picking_items')
-                        ->whereColumn('order_picking_items.order_id', 'orders.id')
-                        ->whereColumn('order_picking_items.order_detail_id', 'order_details.id')
-                        ->where('order_picking_items.status', 'picked');
-                });
-            }
-        }
-
-        // Group by product and route
-        $picklistData = $query
+        // Build and execute query
+        $picklistData = $this->buildPicklistQuery($request)
             ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name', 'stores.store_name')
             ->orderBy('stores.route_name')
             ->orderBy('products.name')
