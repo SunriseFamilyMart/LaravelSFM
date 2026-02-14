@@ -86,10 +86,8 @@ class ProductController extends Controller
 
     // Check 3: Fallback — if store_id is passed (existing behavior)
     if (!$branch && $request->has('store_id')) {
-        $store = Store::find($request->store_id);
-        if ($store) {
-            $branch = $store->branch;
-        }
+        $store = Store::findOrFail($request->store_id);
+        $branch = $store->branch;
     }
 
     $sortBy = $request->sort_by ?? 'latest';
