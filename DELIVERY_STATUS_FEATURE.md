@@ -221,7 +221,8 @@ $upiPayment = PaymentLedger::where('store_id', $order->store_id)
 ### Performance Considerations:
 - Pagination (15 orders/page) prevents slow page loads
 - Eager loading of relationships (customer, delivery_man, etc.)
-- Individual UPI payment queries in loop (could be optimized with join if needed)
+- **Optimized UPI payment loading**: Batch-loads all UPI payments for current page in single query (N+1 issue resolved)
+- Handles orders with or without store_id efficiently
 
 ## Testing Checklist
 

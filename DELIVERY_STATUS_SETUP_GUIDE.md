@@ -239,9 +239,10 @@ $.ajax({
 
 ## Performance Notes
 
-- Page loads 15 orders at a time (paginated)
-- Each order fetches its UPI payment separately (N+1 query)
-- For better performance with many orders, consider optimizing with a JOIN query
+- Page loads 15 orders at a time (paginated for efficiency)
+- UPI payments are batch-loaded in a single query (N+1 issue resolved)
+- Optimized query fetches all UPI payments for the current page's orders at once
+- Works efficiently even for orders without store_id associations
 
 ## Screenshots Location
 
