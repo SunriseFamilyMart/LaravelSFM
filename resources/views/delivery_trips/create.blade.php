@@ -9,7 +9,7 @@
         <div class="card shadow-sm border-0 mb-5">
             <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Assign Orders to Delivery Man</h5>
-                <a href="{{ route('admin.order.list', ['status' => 'all']) }}" class="btn btn-light btn-sm shadow-sm">
+                <a href="{{ route('admin.orders.list', ['status' => 'all']) }}" class="btn btn-light btn-sm shadow-sm">
                     <i class="bi bi-arrow-left"></i> Go Back
                 </a>
             </div>

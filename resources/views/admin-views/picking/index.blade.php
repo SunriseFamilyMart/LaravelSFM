@@ -118,7 +118,7 @@
                                             {{ $orders->firstItem() + $key }}
                                         </td>
                                         <td class="table-column-pl-0">
-                                            <a href="{{ route('admin.picking.show', ['order_id' => $order['id']]) }}">{{ $order['id'] }}</a>
+                                            <a href="{{ route('admin.picking.show', ['id' => $order['id']]) }}">{{ $order['id'] }}</a>
                                         </td>
                                         <td>
                                             @if ($order->is_guest == 0)
@@ -169,7 +169,7 @@
                                         <td>
                                             <div class="btn--container justify-content-center">
                                                 <a class="btn action-btn btn--primary btn-outline-primary"
-                                                    href="{{ route('admin.picking.show', ['order_id' => $order['id']]) }}">
+                                                    href="{{ route('admin.picking.show', ['id' => $order['id']]) }}">
                                                     <i class="tio-invisible"></i> {{ translate('Pick') }}
                                                 </a>
                                             </div>
