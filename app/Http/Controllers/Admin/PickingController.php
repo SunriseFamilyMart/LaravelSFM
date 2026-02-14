@@ -51,7 +51,7 @@ class PickingController extends Controller
         $branches = $this->branch->all();
         $deliveryMen = $this->deliveryMan->all();
 
-        $query = $this->order->with(['customer', 'branch', 'details', 'pickingItems'])
+        $query = $this->order->with(['customer', 'branch', 'details', 'pickingItems', 'store'])
             ->whereIn('order_status', ['confirmed', 'picking', 'processing', 'packaging']);
 
         // Date filter
@@ -130,7 +130,7 @@ class PickingController extends Controller
      */
     public function show($order_id): View|Factory|Application|RedirectResponse
     {
-        $order = $this->order->with(['details.product', 'pickingItems', 'customer', 'branch'])
+        $order = $this->order->with(['details.product', 'pickingItems', 'customer', 'branch', 'store'])
             ->find($order_id);
 
         if (!$order) {

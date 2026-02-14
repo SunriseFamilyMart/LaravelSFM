@@ -49,7 +49,7 @@ class Store extends Model
      */
     public function orders()
     {
-        return $this->hasMany(\App\Model\Order::class, 'store_id');
+        return $this->hasMany(\App\Models\Order::class, 'store_id');
     }
 
     /**

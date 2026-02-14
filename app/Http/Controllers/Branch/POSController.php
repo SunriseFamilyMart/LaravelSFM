@@ -377,7 +377,7 @@ class POSController extends Controller
 
         $this->order->where(['checked' => 0])->update(['checked' => 1]);
 
-        $query = $this->order->pos()->where(['branch_id' => auth('branch')->id()])->with(['customer', 'branch'])
+        $query = $this->order->pos()->where(['branch_id' => auth('branch')->id()])->with(['customer', 'branch', 'store'])
                 ->when((!is_null($startDate) && !is_null($endDate)), function ($query) use ($startDate, $endDate) {
                     return $query->whereDate('created_at', '>=', $startDate)
                     ->whereDate('created_at', '<=', $endDate);

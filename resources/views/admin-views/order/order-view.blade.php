@@ -1297,7 +1297,16 @@
                             <h5>{{ translate('customer_Information') }}</h5>
 
                             <div class="card-body">
-                                @if ($order->is_guest == 0)
+                                @if ($order->store_id && $order->store)
+                                    <p>{{ translate('name') }} :
+                                        <i class="tio-shop"></i> {{ $order->store->store_name ?? $order->store->customer_name }}
+                                    </p>
+                                    @if($order->store->phone_number)
+                                        <p>{{ translate('contact') }} :
+                                            {{ $order->store->phone_number }}
+                                        </p>
+                                    @endif
+                                @elseif ($order->is_guest == 0)
                                     <p>{{ translate('name') }} :
                                         {{ $order->customer ? $order->customer->f_name . ' ' . $order->customer->l_name : '' }}
                                     </p>

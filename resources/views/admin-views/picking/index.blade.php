@@ -121,7 +121,17 @@
                                             <a href="{{ route('admin.picking.show', ['id' => $order['id']]) }}">{{ $order['id'] }}</a>
                                         </td>
                                         <td>
-                                            @if ($order->is_guest == 0)
+                                            @if ($order->store_id && $order->store)
+                                                <div>
+                                                    <span class="text-capitalize font-medium">
+                                                        <i class="tio-shop mr-1"></i>{{ $order->store->store_name ?? $order->store->customer_name }}
+                                                    </span>
+                                                </div>
+                                                @if($order->store->phone_number)
+                                                    <a class="d-block text-body font-size-sm"
+                                                        href="tel:{{ $order->store->phone_number }}">{{ $order->store->phone_number }}</a>
+                                                @endif
+                                            @elseif ($order->is_guest == 0)
                                                 @if (isset($order->customer))
                                                     <div>
                                                         <a class="text-body text-capitalize font-medium"

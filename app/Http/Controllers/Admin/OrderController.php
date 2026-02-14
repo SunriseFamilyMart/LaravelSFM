@@ -82,7 +82,7 @@ class OrderController extends Controller
     // Mark unchecked orders as checked
     $this->order->where(['checked' => 0])->update(['checked' => 1]);
 
-    $query = $this->order->with(['customer', 'branch', 'delivery_man'])
+    $query = $this->order->with(['customer', 'branch', 'delivery_man', 'store'])
 
         // Branch filter
         ->when(($branchId && $branchId != 'all'), function ($query) use ($branchId) {
@@ -448,6 +448,8 @@ public function storeOrder(Request $request)
             'editLogs.orderDetail',
             'creditNotes',          // ✅ THIS IS THE FIX
             'creditNotes.items', 
+            'customer',
+            'store',
         ])
         ->find($id);
 
