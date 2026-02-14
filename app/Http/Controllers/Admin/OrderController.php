@@ -1323,16 +1323,22 @@ public function storeOrder(Request $request)
             ->paginate(15)
             ->appends(['search' => $search, 'branch_id' => $branchId]);
 
-        // Get UPI payment data for each order
-        foreach ($orders as $order) {
-            // Get UPI payment from payment_ledgers via store_id
-            $upiPayment = PaymentLedger::where('store_id', $order->store_id)
-                ->where('order_id', $order->id)
+        // Optimize: Get UPI payment data for all orders in one query to avoid N+1
+        $orderIds = $orders->pluck('id')->toArray();
+        $storeIds = $orders->pluck('store_id')->filter()->toArray();
+
+        if (!empty($orderIds) && !empty($storeIds)) {
+            $upiPayments = PaymentLedger::whereIn('order_id', $orderIds)
+                ->whereIn('store_id', $storeIds)
                 ->where('payment_method', 'upi')
                 ->where('entry_type', 'CREDIT')
-                ->first();
-            
-            $order->upi_payment = $upiPayment;
+                ->get()
+                ->keyBy('order_id');
+
+            // Attach UPI payment to each order
+            foreach ($orders as $order) {
+                $order->upi_payment = $upiPayments->get($order->id);
+            }
         }
 
         return view('admin-views.order.delivery-status', compact('orders', 'branches', 'search', 'branchId'));
