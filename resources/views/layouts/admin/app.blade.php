@@ -153,7 +153,7 @@
     </script>
     <script>
         $('#check-order').on('click', function() {
-            location.href = '{{ route('admin.order.list', ['status' => 'all']) }}';
+            location.href = '{{ route('admin.orders.list', ['status' => 'all']) }}';
         })
 
         function route_alert(route, message) {
