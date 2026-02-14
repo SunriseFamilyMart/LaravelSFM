@@ -53,13 +53,19 @@
                             <td>{{ $store->phone_number }}</td>
                             <td style="max-width:360px; white-space:normal;">{{ $store->address }}</td>
                             <td>
-                                <form method="POST" action="{{ route('admin.stores.approveSelf', $store->id) }}" class="d-flex gap-2">
+                                <form method="POST" action="{{ route('admin.stores.approveSelf', $store->id) }}" class="d-flex gap-2 flex-column">
                                     @csrf
                                     @method('PATCH')
                                     <select class="form-control" name="sales_person_id" required>
                                         <option value="" disabled selected>Select salesperson</option>
                                         @foreach($salesPeople as $sp)
                                             <option value="{{ $sp->id }}">{{ $sp->name }} ({{ $sp->phone_number ?? 'N/A' }})</option>
+                                        @endforeach
+                                    </select>
+                                    <select class="form-control" name="branch" required>
+                                        <option value="" disabled selected>Select branch</option>
+                                        @foreach(\App\Model\Branch::all() as $branch)
+                                            <option value="{{ $branch->name }}">{{ $branch->name }}</option>
                                         @endforeach
                                     </select>
                                     <button class="btn btn-success" type="submit">Approve</button>
