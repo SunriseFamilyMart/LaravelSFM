@@ -46,7 +46,6 @@ class PicklistGeneratorController extends Controller
                 'products.name',
                 'products.weight',
                 'stores.route_name',
-                'stores.store_name',
                 DB::raw('SUM(order_details.quantity) as total_quantity'),
                 DB::raw('SUM(order_details.quantity * products.weight) as total_weight')
             )
@@ -126,7 +125,7 @@ class PicklistGeneratorController extends Controller
 
         // Build and execute query
         $picklistData = $this->buildPicklistQuery($request)
-            ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name', 'stores.store_name')
+            ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name')
             ->orderBy('stores.route_name')
             ->orderBy('products.name')
             ->get();
@@ -169,7 +168,7 @@ class PicklistGeneratorController extends Controller
 
         // Build and execute query
         $picklistData = $this->buildPicklistQuery($request)
-            ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name', 'stores.store_name')
+            ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name')
             ->orderBy('stores.route_name')
             ->orderBy('products.name')
             ->get();
@@ -205,10 +204,15 @@ class PicklistGeneratorController extends Controller
     {
         // Build and execute query
         $picklistData = $this->buildPicklistQuery($request)
-            ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name', 'stores.store_name')
+            ->groupBy('order_details.product_id', 'products.name', 'products.weight', 'stores.route_name')
             ->orderBy('stores.route_name')
             ->orderBy('products.name')
             ->get();
+
+        // Calculate total weight per route once
+        $routeTotals = $picklistData->groupBy('route_name')->map(function ($items) {
+            return $items->sum('total_weight');
+        });
 
         // Prepare data for Excel export
         $storage = [];
@@ -217,15 +221,13 @@ class PicklistGeneratorController extends Controller
         foreach ($picklistData as $item) {
             // Add route separator when route changes
             if ($currentRoute !== $item->route_name && $currentRoute !== null) {
-                // Add route total row
+                // Add route total row using pre-calculated totals
                 $storage[] = [
                     'Route' => 'TOTAL FOR ROUTE: ' . $currentRoute,
                     'Product Name' => '',
                     'Unit Weight (kg)' => '',
                     'Quantity' => '',
-                    'Total Weight (kg)' => $picklistData
-                        ->where('route_name', $currentRoute)
-                        ->sum('total_weight'),
+                    'Total Weight (kg)' => $routeTotals[$currentRoute] ?? 0,
                 ];
                 // Add empty row
                 $storage[] = [
@@ -247,16 +249,14 @@ class PicklistGeneratorController extends Controller
             ];
         }
 
-        // Add final route total
+        // Add final route total using pre-calculated totals
         if ($currentRoute !== null) {
             $storage[] = [
                 'Route' => 'TOTAL FOR ROUTE: ' . $currentRoute,
                 'Product Name' => '',
                 'Unit Weight (kg)' => '',
                 'Quantity' => '',
-                'Total Weight (kg)' => $picklistData
-                    ->where('route_name', $currentRoute)
-                    ->sum('total_weight'),
+                'Total Weight (kg)' => $routeTotals[$currentRoute] ?? 0,
             ];
         }
 
