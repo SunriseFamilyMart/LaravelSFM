@@ -59,4 +59,4 @@ class Store extends Model
     {
         return $this->hasMany(PaymentLedger::class, 'store_id');
     }
-
+}
