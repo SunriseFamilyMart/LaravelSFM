@@ -54,7 +54,9 @@
                     <div class="col-md-3">
                         <h6>{{ translate('Customer') }}</h6>
                         <p>
-                            @if ($order->is_guest == 0 && $order->customer)
+                            @if ($order->store_id && $order->store)
+                                <i class="tio-shop"></i> {{ $order->store->store_name ?? $order->store->customer_name }}
+                            @elseif ($order->is_guest == 0 && $order->customer)
                                 {{ $order->customer->f_name }} {{ $order->customer->l_name }}
                             @else
                                 {{ translate('Guest Customer') }}

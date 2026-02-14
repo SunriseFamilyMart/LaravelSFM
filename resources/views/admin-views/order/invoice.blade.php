@@ -55,7 +55,24 @@
                         </h5>
                     </div>
                     <div class="col-12">
-                        @if ($order->is_guest == 0)
+                        @if ($order->store_id && $order->store)
+                            <h5>
+                                <i class="tio-shop mr-1"></i>{{ translate('Store Name') }} :<span
+                                    class="font-light">{{ $order->store->store_name ?? $order->store->customer_name }}</span>
+                            </h5>
+                            @if($order->store->phone_number)
+                                <h5>
+                                    {{ translate('phone') }} :<span
+                                        class="font-light">{{ $order->store->phone_number }}</span>
+                                </h5>
+                            @endif
+                            @if($order->store->address)
+                                <h5 class="text-break">
+                                    {{ translate('address') }} :<span
+                                        class="font-light">{{ $order->store->address }}</span>
+                                </h5>
+                            @endif
+                        @elseif ($order->is_guest == 0)
                             @if (isset($order->customer))
                                 <h5>
                                     {{ translate('Customer Name') }} :<span

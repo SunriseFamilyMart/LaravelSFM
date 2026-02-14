@@ -141,7 +141,18 @@
                                     <td>{{ date('d M Y', strtotime($order['created_at'])) }}</td>
 
                                     <td>
-                                        @if (isset($order->customer))
+                                        @if ($order->store_id && $order->store)
+                                            <div>
+                                                <span class="text-capitalize font-medium">
+                                                    <i class="tio-shop mr-1"></i>{{ $order->store->store_name ?? $order->store->customer_name }}
+                                                </span>
+                                            </div>
+                                            @if($order->store->phone_number)
+                                                <div class="text-sm">
+                                                    <a href="tel:{{ $order->store->phone_number }}">{{ $order->store->phone_number }}</a>
+                                                </div>
+                                            @endif
+                                        @elseif (isset($order->customer))
                                             <div>
                                                 <a class="text-body text-capitalize font-medium"
                                                     href="{{ route('admin.customer.view', [$order['user_id']]) }}">{{ $order->customer['f_name'] . ' ' . $order->customer['l_name'] }}</a>
