@@ -195,10 +195,14 @@ public function creditNotes()
     {
         // Use the cached paid_amount column (maintained by FIFO service)
         // If null, calculate from payment allocations as fallback
+        // NOTE: The fallback query should rarely execute - it's only for data migration compatibility.
+        // In production, all orders should have paid_amount populated by FIFO service.
         if (isset($this->attributes['paid_amount'])) {
             return (float) $this->attributes['paid_amount'];
         }
         
+        // Fallback: query from allocations (may cause N+1 if used in loops)
+        // TODO: Ensure all existing orders have paid_amount populated
         return (float) $this->paymentAllocations()->sum('allocated_amount');
     }
 

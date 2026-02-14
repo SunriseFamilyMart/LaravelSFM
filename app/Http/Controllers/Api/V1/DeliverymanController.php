@@ -1170,7 +1170,8 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
 
 
         // -------------------- UPDATE ORDER PAYMENT STATUS --------------------
-        // Payment status is already updated by FIFO service, but ensure consistency
+        // FIFO service updates paid_amount but doesn't update payment_status
+        // We update payment_status here to ensure it's consistent with paid amount
         if ($totalPaid == 0) {
             $order->payment_status = 'unpaid';
         } elseif ($totalPaid < $orderTotal) {
