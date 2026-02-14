@@ -253,7 +253,18 @@
                                     <span>{{$order->time_slot?date(config('time_format'), strtotime($order->time_slot['start_time'])).' - ' .date(config('time_format'), strtotime($order->time_slot['end_time'])) :'No Time Slot'}}</span>
                                 </td>
                                 <td>
-                                    @if($order->is_guest == 0)
+                                    @if ($order->store_id && $order->store)
+                                        <div>
+                                            <span class="text-capitalize font-medium">
+                                                <i class="tio-shop mr-1"></i>{{ $order->store->store_name ?? $order->store->customer_name }}
+                                            </span>
+                                        </div>
+                                        @if($order->store->phone_number)
+                                            <div class="text-sm">
+                                                <a href="tel:{{ $order->store->phone_number }}">{{ $order->store->phone_number }}</a>
+                                            </div>
+                                        @endif
+                                    @elseif($order->is_guest == 0)
                                         @if(isset($order->customer))
                                             <div>
                                                 <a class="text-body text-capitalize font-medium"

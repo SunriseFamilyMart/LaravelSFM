@@ -193,7 +193,7 @@ class OfflinePaymentMethodController extends Controller
 
         $status = $statusMapping[$status];
 
-        $orders = $this->order->with(['offline_payment'])
+        $orders = $this->order->with(['offline_payment', 'customer', 'store'])
             ->where(['payment_method' => 'offline_payment'])
             ->whereHas('offline_payment', function ($query) use($status){
                 $query->where('status', $status);

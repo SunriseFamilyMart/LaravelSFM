@@ -49,7 +49,7 @@ class Store extends Model
      */
     public function orders()
     {
-        return $this->hasMany(\App\Model\Order::class, 'store_id');
+        return $this->hasMany(\App\Models\Order::class, 'store_id');
     }
 
     /**
@@ -59,7 +59,6 @@ class Store extends Model
     {
         return $this->hasMany(PaymentLedger::class, 'store_id');
     }
-
     /**
      * Get outstanding balance for this store from store_ledgers table
      * Returns sum of (debit - credit)

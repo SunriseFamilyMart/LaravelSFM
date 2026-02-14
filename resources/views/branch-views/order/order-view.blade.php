@@ -735,7 +735,25 @@
                             </span>
                             <span>{{ translate('Customer information') }}</span>
                         </h5>
-                        @if ($order->is_guest == 1)
+                        @if ($order->store_id && $order->store)
+                            <div class="media align-items-center deco-none customer--information-single">
+                                <div class="avatar avatar-circle">
+                                    <img class="avatar-img" src="{{ asset('public/assets/admin/img/admin.jpg') }}"
+                                        alt="Image Description">
+                                </div>
+                                <div class="media-body">
+                                    <span class="fz--14px text--title font-semibold text-hover-primary d-block">
+                                        <i class="tio-shop mr-1"></i>{{ $order->store->store_name ?? $order->store->customer_name }}
+                                    </span>
+                                    @if($order->store->phone_number)
+                                        <span class="text--title font-semibold d-block">
+                                            <i class="tio-call-talking-quiet mr-2"></i>
+                                            <a href="tel:{{ $order->store->phone_number }}">{{ $order->store->phone_number }}</a>
+                                        </span>
+                                    @endif
+                                </div>
+                            </div>
+                        @elseif ($order->is_guest == 1)
                             <div class="media align-items-center deco-none customer--information-single">
                                 <div class="avatar avatar-circle">
                                     <img class="avatar-img" src="{{ asset('public/assets/admin/img/admin.jpg') }}"
