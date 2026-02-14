@@ -26,6 +26,7 @@ Route::prefix('v1/store')->group(function () {
     Route::middleware('store.auth')->group(function () {
         Route::get('/me', [StoreAuthController::class, 'me']);
         Route::get('/arrear', [StoreAuthController::class, 'getArrear']);
+        Route::get('/credit-status', [StoreAuthController::class, 'creditStatus']);
         Route::get('/payment-statement', [StoreAuthController::class, 'paymentStatement']);
         Route::get('/orders/{order_id}', [StoreAuthController::class, 'orderDetail']);
         Route::post('/logout', [StoreAuthController::class, 'logout']);
