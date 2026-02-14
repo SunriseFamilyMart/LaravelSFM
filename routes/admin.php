@@ -49,6 +49,7 @@ use App\Http\Controllers\Admin\PickingController;
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\PurchaseManagementController;
 use App\Http\Controllers\Admin\PicklistGeneratorController;
+use App\Http\Controllers\Admin\DeliveryStatusController;
 
 
 
@@ -301,8 +302,8 @@ Route::patch('/stores/{store}/update-sales-person', [StoreController::class, 'up
 
         // Delivery Status Routes
         Route::group(['prefix' => 'delivery-status', 'as' => 'delivery-status.', 'middleware' => ['module:order_management']], function () {
-            Route::get('/', [OrderController::class, 'deliveryStatus'])->name('index');
-            Route::post('mark-collected/{order_id}', [OrderController::class, 'markAsCollected'])->name('mark-collected');
+            Route::get('/', [DeliveryStatusController::class, 'index'])->name('index');
+            Route::post('mark-collected/{order_id}', [DeliveryStatusController::class, 'markAsCollected'])->name('mark-collected');
         });
 
         // Route::group(['prefix' => 'delivery-trips', 'as' => 'delivery-trips.'], function () {
