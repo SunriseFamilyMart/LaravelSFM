@@ -28,7 +28,7 @@ class DeliveryStatusController extends Controller
         $deliveryManId = $request->delivery_man_id ?? 'all';
         $startDate = $request->start_date ?? null;
         $endDate = $request->end_date ?? null;
-        $route = $request->route ?? 'all';
+        $routeFilter = $request->route ?? 'all';
         $paymentStatus = $request->payment_status ?? 'all';
         $collectionStatus = $request->collection_status ?? 'all';
         $search = $request->search ?? null;
@@ -38,7 +38,7 @@ class DeliveryStatusController extends Controller
             ->when($branchId && $branchId != 'all', fn($q) => $q->where('branch_id', $branchId))
             ->when($deliveryManId && $deliveryManId != 'all', fn($q) => $q->where('delivery_man_id', $deliveryManId))
             ->when($startDate && $endDate, fn($q) => $q->whereDate('created_at', '>=', $startDate)->whereDate('created_at', '<=', $endDate))
-            ->when($route && $route != 'all', fn($q) => $q->whereHas('store', fn($s) => $s->where('route_name', $route)))
+            ->when($routeFilter && $routeFilter != 'all', fn($q) => $q->whereHas('store', fn($s) => $s->where('route_name', $routeFilter)))
             ->when($paymentStatus && $paymentStatus != 'all', fn($q) => $q->where('payment_status', $paymentStatus))
             ->when($collectionStatus && $collectionStatus != 'all', function($q) use($collectionStatus) {
                 if($collectionStatus == 'collected') {
@@ -77,7 +77,7 @@ class DeliveryStatusController extends Controller
             ->when($branchId && $branchId != 'all', fn($q) => $q->where('orders.branch_id', $branchId))
             ->when($deliveryManId && $deliveryManId != 'all', fn($q) => $q->where('orders.delivery_man_id', $deliveryManId))
             ->when($startDate && $endDate, fn($q) => $q->whereDate('orders.created_at', '>=', $startDate)->whereDate('orders.created_at', '<=', $endDate))
-            ->when($route && $route != 'all', fn($q) => $q->whereHas('store', fn($s) => $s->where('route_name', $route)))
+            ->when($routeFilter && $routeFilter != 'all', fn($q) => $q->whereHas('store', fn($s) => $s->where('route_name', $routeFilter)))
             ->when($paymentStatus && $paymentStatus != 'all', fn($q) => $q->where('orders.payment_status', $paymentStatus))
             ->when($collectionStatus && $collectionStatus != 'all', function($q) use($collectionStatus) {
                 if($collectionStatus == 'collected') {
@@ -98,13 +98,17 @@ class DeliveryStatusController extends Controller
             ->orderBy('orders.delivery_date', 'desc')
             ->paginate(15);
 
-        // Get UPI payments for each order
+        // Get UPI payments for all orders in a single query (N+1 optimization)
+        $orderIds = $orders->pluck('id')->toArray();
+        $upiPayments = DB::table('payment_ledgers')
+            ->whereIn('order_id', $orderIds)
+            ->where('payment_method', 'upi')
+            ->get()
+            ->keyBy('order_id');
+
+        // Attach UPI payment data to orders
         foreach ($orders as $order) {
-            $upiPayment = DB::table('payment_ledgers')
-                ->where('order_id', $order->id)
-                ->where('payment_method', 'upi')
-                ->first();
-            
+            $upiPayment = $upiPayments->get($order->id);
             $order->upi_amount = $upiPayment->amount ?? 0;
             $order->upi_transaction_id = $upiPayment->transaction_ref ?? null;
         }
@@ -123,7 +127,7 @@ class DeliveryStatusController extends Controller
             'deliveryManId', 
             'startDate', 
             'endDate', 
-            'route', 
+            'routeFilter', 
             'paymentStatus', 
             'collectionStatus', 
             'search'

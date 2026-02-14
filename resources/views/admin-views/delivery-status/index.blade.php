@@ -119,9 +119,9 @@
                         <div class="col-sm-6 col-md-4 col-lg-3">
                             <label class="input-label">{{ translate('Route') }}</label>
                             <select class="custom-select custom-select-sm text-capitalize min-h-45px" name="route">
-                                <option value="all" {{ ($route ?? 'all') == 'all' ? 'selected' : '' }}>{{ translate('All Routes') }}</option>
+                                <option value="all" {{ ($routeFilter ?? 'all') == 'all' ? 'selected' : '' }}>{{ translate('All Routes') }}</option>
                                 @foreach ($routes as $routeName)
-                                    <option value="{{ $routeName }}" {{ ($route ?? '') == $routeName ? 'selected' : '' }}>
+                                    <option value="{{ $routeName }}" {{ ($routeFilter ?? '') == $routeName ? 'selected' : '' }}>
                                         {{ $routeName }}
                                     </option>
                                 @endforeach
@@ -298,7 +298,7 @@
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    toastr.success('{{ translate("Order marked as collected") }}', {CloseButton: true});
+                    toastr.success('{{ translate("Order marked as collected") }}');
                     // Update collection status badge
                     let badge = document.getElementById(`collection-status-${orderId}`);
                     badge.textContent = '{{ translate("Collected") }}';
@@ -310,13 +310,13 @@
                     button.classList.remove('btn-success');
                     button.classList.add('btn-secondary');
                 } else {
-                    toastr.error(data.message, {CloseButton: true});
+                    toastr.error(data.message);
                     button.disabled = false;
                     button.classList.remove('disabled');
                 }
             })
             .catch(err => {
-                toastr.error('{{ translate("Error marking order as collected") }}', {CloseButton: true});
+                toastr.error('{{ translate("Error marking order as collected") }}');
                 button.disabled = false;
                 button.classList.remove('disabled');
             });
