@@ -24,19 +24,19 @@ class CreditLimitTest extends TestCase
     {
         $response = $this->getJson('/api/v1/store/credit-status');
 
-        // Should return 401 or redirect to login
-        $this->assertContains($response->status(), [401, 302]);
+        // Should return 401 for unauthorized
+        $response->assertStatus(401);
     }
 
     /**
-     * Test that store orders endpoint exists
+     * Test that store orders endpoint requires authentication
      */
-    public function test_store_orders_endpoint_exists()
+    public function test_store_orders_endpoint_requires_authentication()
     {
         $response = $this->postJson('/api/v1/store/orders', []);
 
-        // Should return 401 for unauthorized or 422 for validation
-        $this->assertContains($response->status(), [401, 422]);
+        // Should return 401 for unauthorized
+        $response->assertStatus(401);
     }
 
     /**

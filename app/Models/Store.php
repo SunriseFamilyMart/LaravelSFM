@@ -60,3 +60,15 @@ class Store extends Model
         return $this->hasMany(PaymentLedger::class, 'store_id');
     }
 
+    /**
+     * Get outstanding balance for this store from store_ledgers table
+     * Returns sum of (debit - credit)
+     */
+    public function getOutstandingBalance()
+    {
+        return \Illuminate\Support\Facades\DB::table('store_ledgers')
+            ->where('store_id', $this->id)
+            ->selectRaw('COALESCE(SUM(debit - credit), 0) as balance')
+            ->value('balance') ?? 0;
+    }
+}

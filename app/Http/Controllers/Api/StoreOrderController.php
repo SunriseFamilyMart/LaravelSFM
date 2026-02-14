@@ -84,10 +84,7 @@ public function index(Request $request)
         $creditLimit = $store->credit_limit ?? 0;
 
         if ($creditLimit > 0) {
-            $outstanding = DB::table('store_ledgers')
-                ->where('store_id', $store->id)
-                ->selectRaw('COALESCE(SUM(debit - credit), 0) as balance')
-                ->value('balance') ?? 0;
+            $outstanding = $store->getOutstandingBalance();
 
             // Calculate order total from cart items first
             $orderTotal = 0;

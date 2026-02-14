@@ -450,23 +450,8 @@ class StoreAuthController extends Controller
     {
         $store = $request->attributes->get('auth_store');
 
-        if (!$store) {
-            $token = $request->header('Authorization') ?: $request->header('X-Store-Token');
-            if (!$token) {
-                return response()->json(['success' => false, 'message' => 'Unauthorized. Missing token.'], 401);
-            }
-            $token = trim(str_replace('Bearer ', '', $token));
-            $store = Store::where('auth_token', $token)->first();
-            if (!$store) {
-                return response()->json(['success' => false, 'message' => 'Unauthorized. Invalid token.'], 401);
-            }
-        }
-
         $creditLimit = $store->credit_limit ?? 0;
-        $outstanding = DB::table('store_ledgers')
-            ->where('store_id', $store->id)
-            ->selectRaw('COALESCE(SUM(debit - credit), 0) as balance')
-            ->value('balance') ?? 0;
+        $outstanding = $store->getOutstandingBalance();
 
         $available = max($creditLimit - $outstanding, 0);
         $utilizationPercent = $creditLimit > 0 ? round(($outstanding / $creditLimit) * 100, 1) : 0;
