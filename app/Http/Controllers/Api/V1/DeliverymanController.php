@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\DeliveryTrip;
 use App\Model\OrderDetail;
 use App\Model\OrderEditLog;
+use App\Models\OrderPayment; // Legacy - only for deprecated store() method
 
 class DeliverymanController extends Controller
 {
@@ -358,7 +359,6 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         ->with([
             'delivery_address',
             'customer',
-            'partial_payment',
             'order_image',
             'store'
         ])
@@ -388,26 +388,14 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
             ];
         }
 
-      
-        $result = DB::table('orders as o')
-        ->leftJoin('order_payments as op', function ($join) {
-    $join->on('o.id', '=', 'op.order_id')
-         ->where('op.payment_status', 'complete'); 
-})
-
-            ->where('o.id', $order->id)
-            ->selectRaw("
-                o.order_amount,
-                o.total_tax_amount,
-                SUM(COALESCE(op.amount, 0)) AS total_paid,
-                (o.order_amount + o.total_tax_amount - SUM(COALESCE(op.amount, 0))) AS pending_amount
-            ")
-            ->groupBy('o.id', 'o.order_amount', 'o.total_tax_amount')
-            ->first();
+        // Use paid_amount column (maintained by FIFO service) instead of legacy order_payments join
+        $orderTotal = ($order->order_amount ?? 0) + ($order->total_tax_amount ?? 0);
+        $totalPaid = $order->paid_amount ?? 0;
+        $pendingAmount = max($orderTotal - $totalPaid, 0);
 
         // Set final values
-        $order->amount = $result->total_paid ?? 0;
-        $order->arrear_amount = $result->pending_amount ?? 0;
+        $order->amount = $totalPaid;
+        $order->arrear_amount = $pendingAmount;
 
         return $order;
     });
@@ -825,7 +813,7 @@ public function getCurrentOrders(Request $request): \Illuminate\Http\JsonRespons
         }
 
         $order = $this->order
-            ->with(['customer', 'partial_payment', 'order_image'])
+            ->with(['customer', 'order_image'])
             ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'out_for_delivery'])
             ->where(['delivery_man_id' => $deliveryman['id'], 'id' => $request->id])
             ->first();

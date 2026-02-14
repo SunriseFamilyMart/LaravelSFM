@@ -18,7 +18,6 @@ use App\Models\GuestUser;
 use App\Models\OfflinePayment;
 use App\Models\OrderArea;
 use App\Models\OrderImage;
-use App\Models\OrderPartialPayment;
 use App\Traits\HelperTrait;
 use App\User;
 use Illuminate\Http\JsonResponse;
@@ -349,7 +348,7 @@ class OrderController extends Controller
         if (!is_null($phone)){
             if ($order['is_guest'] == 0){
                 $details = $this->orderDetail
-                    ->with(['order', 'order.delivery_address' ,'order.customer', 'order.partial_payment', 'order.offline_payment', 'order.order_image'])
+                    ->with(['order', 'order.delivery_address' ,'order.customer', 'order.offline_payment', 'order.order_image'])
                     ->where(['order_id' => $request['order_id']])
                     ->whereHas('order.customer', function ($customerSubQuery) use ($phone) {
                         $customerSubQuery->where('phone', $phone);
@@ -357,7 +356,7 @@ class OrderController extends Controller
                     ->get();
             }else{
                 $details = $this->orderDetail
-                    ->with(['order', 'order.delivery_address', 'order.partial_payment', 'order.offline_payment', 'order.order_image'])
+                    ->with(['order', 'order.delivery_address', 'order.offline_payment', 'order.order_image'])
                     ->where(['order_id' => $request['order_id']])
                     ->whereHas('order.delivery_address', function ($addressSubQuery) use ($phone) {
                         $addressSubQuery->where('contact_person_number', $phone);
@@ -366,7 +365,7 @@ class OrderController extends Controller
             }
         }else{
             $details = $this->orderDetail
-                ->with(['order', 'order.partial_payment', 'order.offline_payment'])
+                ->with(['order', 'order.offline_payment'])
                 ->where(['order_id' => $request['order_id']])
                 ->whereHas('order', function ($q) use ($userId, $userType){
                     $q->where(['user_id' => $userId, 'is_guest' => $userType]);

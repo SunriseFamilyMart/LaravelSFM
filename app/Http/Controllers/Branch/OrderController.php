@@ -171,21 +171,13 @@ class OrderController extends Controller
         }
 
         if (in_array($request['order_status'] , ['returned', 'failed', 'canceled']) && $order['is_guest'] == 0 && isset($order->customer) && Helpers::get_business_settings('wallet_status') == 1) {
-            if ($order['payment_method'] == 'wallet_payment' && $order->partial_payment->isEmpty() ){
-                $this->calculateRefundAmount(order: $order, amount: $order->order_amount);
-            }
+            // Get total paid amount from ledger system
+            $totalPaid = $order->paid_amount ?? 0;
 
-            if ($order['payment_method'] != 'cash_on_delivery' && $order['payment_method'] != 'wallet_payment' && $order['payment_method'] != 'offline_payment' && $order->partial_payment->isEmpty()){
-                $this->calculateRefundAmount(order: $order, amount: $order->order_amount);
-            }
-
-            if ($order['payment_method'] == 'offline_payment' && $order['payment_status'] == 'paid' && $order->partial_payment->isEmpty()){
-                $this->calculateRefundAmount(order: $order, amount: $order['order_amount']);
-            }
-
-            if ($order->partial_payment->isNotEmpty()){
-                $partial_payment_total = $order->partial_payment->sum('paid_amount');
-                $this->calculateRefundAmount(order: $order, amount: $partial_payment_total);
+            // Only refund if something was actually paid
+            if ($totalPaid > 0) {
+                // Refund the amount that was paid
+                $this->calculateRefundAmount(order: $order, amount: $totalPaid);
             }
         }
 
