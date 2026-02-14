@@ -138,6 +138,24 @@ class Order extends Model
     }
 
     /**
+     * Legacy payment relationship (OrderPayment table - deprecated)
+     * @deprecated Use paymentLedgers() instead
+     */
+    public function payment()
+    {
+        return $this->hasOne(\App\Models\OrderPayment::class, 'order_id');
+    }
+
+    /**
+     * Legacy payments relationship (OrderPayment table - deprecated)
+     * @deprecated Use paymentLedgers() instead
+     */
+    public function payments()
+    {
+        return $this->hasMany(\App\Models\OrderPayment::class, 'order_id');
+    }
+
+    /**
      * Payment ledgers associated with this order
      */
     public function paymentLedgers()
