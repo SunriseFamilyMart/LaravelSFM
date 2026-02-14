@@ -38,7 +38,16 @@
                                 {{ date('d M Y', strtotime($order['created_at'])) }}
                                 {{ date(config('time_format'), strtotime($order['created_at'])) }}</span>
 
-                            @if ($order->payments && $order->payments->count() > 0)
+                            @php
+                                // Get payment ledgers via allocations for this order
+                                $orderPayments = DB::table('payment_allocations as pa')
+                                    ->join('payment_ledgers as pl', 'pa.payment_ledger_id', '=', 'pl.id')
+                                    ->where('pa.order_id', $order->id)
+                                    ->select('pl.*', 'pa.allocated_amount')
+                                    ->get();
+                            @endphp
+
+                            @if ($orderPayments && $orderPayments->count() > 0)
                                 <div class="card p-3 mb-3 shadow-sm">
                                     <h5 class="mb-3"><strong>Payment Summary</strong></h5>
 <p class="mb-1">
@@ -48,10 +57,7 @@
 <p class="mb-1">
     <strong>Total Paid: </strong>
     @php
-        
-        $totalPaid = $order->payments
-            ->where('payment_status', 'complete')
-            ->sum('amount');
+        $totalPaid = $order->paid_amount ?? 0;
     @endphp
     ₹{{ number_format($totalPaid, 2) }}
 </p>
@@ -69,11 +75,11 @@
                                         <summary class="text-primary" style="cursor: pointer;">View Payment Details
                                         </summary>
                                         <div class="mt-3">
-                                            @foreach ($order->payments as $payment)
+                                            @foreach ($orderPayments as $payment)
                                                 <p class="mb-1">
                                                     {{ ucfirst($payment->payment_method) }} —
-                                                    ₹{{ number_format($payment->amount, 2) }}
-                                                    ({{ ucfirst($payment->payment_status) }})
+                                                    ₹{{ number_format($payment->allocated_amount, 2) }}
+                                                    ({{ $payment->entry_type === 'CREDIT' ? 'Complete' : 'Refund' }})
                                                 </p>
                                             @endforeach
                                         </div>

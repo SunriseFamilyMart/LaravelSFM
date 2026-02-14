@@ -37,8 +37,8 @@ class Order extends Model
         'delivery_date',
         'extra_discount',
         'sales_person_id',
-        'store_id',   // ✅ Add this
-
+        'store_id',
+        'paid_amount',
     ];
 
     protected $casts = [
@@ -57,6 +57,7 @@ class Order extends Model
         'delivery_address' => 'array',
         'delivery_date' => 'date',
         'free_delivery_amount' => 'float',
+        'paid_amount' => 'float',
     ];
 
     public function details(): \Illuminate\Database\Eloquent\Relations\HasMany
@@ -182,6 +183,39 @@ public function creditNotes()
     public function pickingItems()
     {
         return $this->hasMany(\App\Models\OrderPickingItem::class);
+    }
+
+    /**
+     * Get total amount paid from payment allocations
+     * This provides backward compatibility for code that expects payment totals
+     * 
+     * @return float
+     */
+    public function getTotalPaidAttribute()
+    {
+        // Use the cached paid_amount column (maintained by FIFO service)
+        // If null, calculate from payment allocations as fallback
+        // NOTE: The fallback query should rarely execute - it's only for data migration compatibility.
+        // In production, all orders should have paid_amount populated by FIFO service.
+        if (isset($this->attributes['paid_amount'])) {
+            return (float) $this->attributes['paid_amount'];
+        }
+        
+        // Fallback: query from allocations (may cause N+1 if used in loops)
+        // TODO: Ensure all existing orders have paid_amount populated
+        return (float) $this->paymentAllocations()->sum('allocated_amount');
+    }
+
+    /**
+     * Get the outstanding balance (arrear) for this order
+     * 
+     * @return float
+     */
+    public function getArrearAttribute()
+    {
+        $total = $this->order_amount + ($this->total_tax_amount ?? 0);
+        $paid = $this->paid_amount ?? 0;
+        return max($total - $paid, 0);
     }
 
 }

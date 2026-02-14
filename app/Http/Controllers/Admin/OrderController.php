@@ -82,7 +82,7 @@ class OrderController extends Controller
     // Mark unchecked orders as checked
     $this->order->where(['checked' => 0])->update(['checked' => 1]);
 
-    $query = $this->order->with(['customer', 'branch', 'delivery_man', 'payments'])
+    $query = $this->order->with(['customer', 'branch', 'delivery_man'])
 
         // Branch filter
         ->when(($branchId && $branchId != 'all'), function ($query) use ($branchId) {
@@ -100,9 +100,9 @@ class OrderController extends Controller
             return $query->where('delivery_man_id', $deliveryManId);
         })
 
-        // Payment Method filter
+        // Payment Method filter - use payment_ledgers instead of legacy payments
         ->when($paymentMethod && $paymentMethod != 'all', function ($query) use ($paymentMethod) {
-            return $query->whereHas('payments', function ($q) use ($paymentMethod) {
+            return $query->whereHas('paymentLedgers', function ($q) use ($paymentMethod) {
                 $q->where('payment_method', $paymentMethod);
             });
         });
