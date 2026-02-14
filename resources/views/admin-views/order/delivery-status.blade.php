@@ -15,6 +15,11 @@
     </style>
 @endpush
 
+@php
+    // Define total column count for maintainability
+    $totalColumns = 13;
+@endphp
+
 @section('content')
     <div class="content container-fluid">
         <div class="page-header">
@@ -200,7 +205,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="13" class="text-center">
+                                <td colspan="{{ $totalColumns }}" class="text-center">
                                     <div class="py-5">
                                         <img src="{{ asset('public/assets/admin/img/no-data.png') }}" 
                                              alt="{{ translate('No orders found') }}" class="w--100">

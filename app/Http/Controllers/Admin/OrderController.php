@@ -1325,11 +1325,10 @@ public function storeOrder(Request $request)
 
         // Optimize: Get UPI payment data for all orders in one query to avoid N+1
         $orderIds = $orders->pluck('id')->toArray();
-        $storeIds = $orders->pluck('store_id')->filter()->toArray();
 
-        if (!empty($orderIds) && !empty($storeIds)) {
+        if (!empty($orderIds)) {
+            // Get UPI payments for orders - handle both with and without store_id
             $upiPayments = PaymentLedger::whereIn('order_id', $orderIds)
-                ->whereIn('store_id', $storeIds)
                 ->where('payment_method', 'upi')
                 ->where('entry_type', 'CREDIT')
                 ->get()
